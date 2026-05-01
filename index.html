@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>G1ターフカジノ - 安定保存版</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root { --turf: #0a2e1a; --gold: #ffd700; --panel: rgba(15,15,15,0.98); --accent: #00ff88; --red: #ff4757; --blue: #54a0ff; --warning: #ff9f43; }
+        body { font-family: sans-serif; background: var(--turf); color: #fff; margin: 0; padding: 10px; -webkit-text-size-adjust: 100%; }
+        .container { max-width: 500px; margin: auto; }
+        .board { background: var(--panel); border: 2px solid var(--gold); border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .storage-ctrl { display: flex; gap: 5px; margin-bottom: 15px; }
+        .mini-btn { flex: 1; padding: 12px; font-size: 13px; cursor: pointer; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; font-weight: bold; }
+        .tab-btn { flex: 1; padding: 12px; border: none; border-radius: 8px; cursor: pointer; background: #333; color: #aaa; }
+        .tab-btn.active { background: var(--gold); color: #000; font-weight: bold; }
+        .btn { background: linear-gradient(to bottom, #ffd700, #b8860b); border: none; padding: 16px; color: #000; font-weight: bold; border-radius: 8px; width: 100%; margin: 8px 0; font-size: 16px; cursor: pointer; }
+        input, select { width: 100%; padding: 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #333; margin: 5px 0; background: #000; color: #fff; font-size: 16px; }
+        .race-card { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 10px; margin-top: 10px; border-left: 5px solid #444; }
+        .hidden { display: none !important; }
+        #debug-log { font-size: 10px; color: #aaa; background: #000; padding: 8px; margin-top: 20px; border-radius: 6px; border: 1px solid #333; max-height: 120px; overflow-y: auto; white-space: pre-wrap; }
+        #result-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div id="result-overlay">
+    <div style="font-size: 1.5em; color: var(--gold);">🏆 RESULT 🏆</div>
+    <div id="winner-name" style="font-size: 2.5em; font-weight: bold; margin: 20px 0;">馬名</div>
+    <div id="winner-odds" style="font-size: 1.5em;">配当: x0.0</div>
+    <button class="btn" onclick="closeResult()" style="width:200px; margin-top:30px;">閉じる</button>
+</div>
+
+<div class="container">
+    <div id="mode-tabs" style="display:flex; gap:10px; margin-bottom:15px;">
+        <button id="tab-play" class="tab-btn active" onclick="switchMode('play')">ゲームに参加</button>
+        <button id="tab-edit" class="tab-btn" onclick="switchMode('edit')">レースを作る</button>
+    </div>
+
+    <div id="registration-area" class="hidden">
+        <div class="storage-ctrl">
+            <button type="button" class="mini-btn" style="border-color:var(--blue);" onclick="exportToFile()">💾 ファイル保存</button>
+            <button type="button" class="mini-btn" style="border-color:var(--accent);" onclick="importFromFile()">📥 ファイル読込</button>
+            <button type="button" class="mini-btn" style="border-color:var(--red);" onclick="clearAllData()">🗑️ 全消去</button>
+        </div>
+        <input type="file" id="importFile" style="display:none" accept=".json" onchange="handleFileSelect(event)">
+
+        <div class="board">
+            <h3 id="form-title" style="margin:0; color:var(--gold);">🏁 レース登録・編集</h3>
+            <input type="hidden" id="editingId">
+            <input type="text" id="raceName" placeholder="レース名 (例: 日本ダービー)">
+            <label style="font-size:11px; color:var(--warning);">動画を選択（一度保存すれば次回から不要）:</label>
+            <input type="file" id="videoFile" accept="video/*">
+            <div id="horse-inputs"></div>
+            <button type="button" onclick="addHorseField()" style="background:#222; color:#fff; border:1px solid #444; padding:10px; width:100%; border-radius:8px; margin:10px 0;">+ 馬を追加</button>
+            <button type="button" class="btn" onclick="applyToPool()">リストへ追加・更新</button>
+        </div>
+
+        <h3 style="color:var(--gold); margin-left:5px;">📋 登録済みレース</h3>
+        <div id="race-list-display"></div>
+    </div>
+
+    <!-- 接続・メイン画面 (省略なし) -->
+    <div id="setup-screen" class="board">
+        <h2 style="text-align:center; color:var(--gold);">G1 ターフカジノ</h2>
+        <input type="text" id="roomName" placeholder="部屋の合言葉">
+        <button class="btn" onclick="initPeer('host')">親機(カジノ)として起動</button>
+        <button class="btn" onclick="initPeer('guest')" style="background:#fff; color:#000;">子機(プレイヤー)として参加</button>
+    </div>
+
+    <div id="host-screen" class="hidden">
+        <div class="board">
+            <h2 id="host-race-title" style="text-align:center; color:var(--gold);">レース未選択</h2>
+            <div id="host-odds-display" style="margin:20px 0;"></div>
+            <button class="btn" onclick="pickRaceFromList()">登録リストから抽選</button>
+            <button id="startBtn" class="btn" onclick="startRace()" disabled>🏁 締切・レース出走</button>
+        </div>
+    </div>
+
+    <div id="guest-screen" class="hidden">
+        <div class="board">
+            <div id="my-chips" style="font-size:40px; color:var(--gold); text-align:center; font-weight:bold;">1,000</div>
+            <h3 id="guest-race-name" style="text-align:center; margin-top:10px;">親機の開始待ち...</h3>
+            <div id="betting-area"></div>
+        </div>
+    </div>
+
+    <div id="debug-log">【システムログ】</div>
+</div>
+
+<video id="mainVideo" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#000; display:none; z-index:9999;" playsinline></video>
+
+<script>
+let racePool = [];
+let videoMap = new Map();
+let peer = null, connections = [], guestConn = null;
+let currentRace = null, myChips = 1000;
+
+// --- IndexedDB ユーティリティ (修正版) ---
+const DB_NAME = "TurfCasinoDB";
+const STORE_NAME = "Videos";
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = e => e.target.result.createObjectStore(STORE_NAME);
+        request.onsuccess = e => resolve(e.target.result);
+        request.onerror = e => reject(e.error);
+    });
+}
+
+async function saveVideoToDB(id, blob) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.put(blob, id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function getVideoFromDB(id) {
+    const db = await openDB();
+    return new Promise((resolve) => {
+        const tx = db.transaction(STORE_NAME, "readonly");
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.get(id);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+    });
+}
+
+// --- システム共通 ---
+function log(msg) {
+    const el = document.getElementById('debug-log');
+    el.innerText += `\n[${new Date().toLocaleTimeString()}] ${msg}`;
+    el.scrollTop = el.scrollHeight;
+}
+
+function savePoolToLocalStorage() {
+    localStorage.setItem('turf_race_pool', JSON.stringify(racePool));
+}
+
+// --- レース管理 (修正版) ---
+async function applyToPool() {
+    log("更新処理を開始...");
+    try {
+        const name = document.getElementById('raceName').value.trim();
+        if(!name) return alert("レース名を入力してください");
+        
+        const editingId = document.getElementById('editingId').value;
+        const id = editingId || "R_" + Date.now();
+        const fileInput = document.getElementById('videoFile');
+
+        // 動画が選択された場合
+        if(fileInput.files && fileInput.files[0]) {
+            log("動画保存中...");
+            const file = fileInput.files[0];
+            await saveVideoToDB(id, file);
+            if(videoMap.has(id)) URL.revokeObjectURL(videoMap.get(id));
+            videoMap.set(id, URL.createObjectURL(file));
+        }
+
+        const horses = Array.from(document.querySelectorAll('.horse-input-row')).map(row => ({
+            name: row.querySelector('.h-name').value || "無名馬",
+            initialOdds: parseFloat(row.querySelector('.h-odds').value) || 2.0,
+            currentOdds: parseFloat(row.querySelector('.h-odds').value) || 2.0,
+            rank: parseInt(row.querySelector('.h-rank').value),
+            pool: 0
+        }));
+
+        if(horses.length < 1) return alert("馬を少なくとも1頭追加してください");
+
+        const raceData = { id, name, horses };
+        const idx = racePool.findIndex(r => r.id === id);
+        if(idx > -1) racePool[idx] = raceData; else racePool.push(raceData);
+
+        savePoolToLocalStorage();
+        await updateRaceListUI(); // ここでリストを再描画
+        resetForm();
+        log("保存成功: " + name);
+    } catch (e) {
+        log("保存エラー: " + e.message);
+        console.error(e);
+    }
+}
+
+async function updateRaceListUI() {
+    const container = document.getElementById('race-list-display');
+    if (!container) return;
+    
+    container.innerHTML = racePool.length ? "" : "<p style='text-align:center;color:#666;'>登録なし</p>";
+    
+    for (const r of racePool) {
+        // メモリになければDBからURL生成
+        if (!videoMap.has(r.id)) {
+            const blob = await getVideoFromDB(r.id);
+            if (blob) videoMap.set(r.id, URL.createObjectURL(blob));
+        }
+
+        const hasVideo = videoMap.has(r.id);
+        const card = document.createElement('div');
+        card.className = "race-card";
+        card.style.borderLeftColor = hasVideo ? "var(--accent)" : "var(--warning)";
+        card.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <b>${r.name}</b><br>
+                    <small style="color:${hasVideo?'var(--accent)':'var(--warning)'}">${hasVideo?'✅ 動画準備完了':'⚠️ 動画を要再設定'}</small>
+                </div>
+                <div>
+                    <button onclick="editRace('${r.id}')" style="background:var(--blue); color:#fff; border:none; padding:8px; border-radius:6px;">編集</button>
+                    <button onclick="deleteRace('${r.id}')" style="background:#444; color:#fff; border:none; padding:8px; border-radius:6px; margin-left:5px;">削除</button>
+                </div>
+            </div>`;
+        container.appendChild(card);
+    }
+}
+
+function resetForm() {
+    document.getElementById('editingId').value = "";
+    document.getElementById('raceName').value = "";
+    document.getElementById('videoFile').value = "";
+    document.getElementById('horse-inputs').innerHTML = "";
+    document.getElementById('form-title').innerText = "🏁 レース登録・編集";
+    addHorseField(); addHorseField();
+}
+
+function addHorseField(data = null) {
+    const div = document.createElement('div');
+    div.className = 'horse-input-row';
+    div.style = "display:grid; grid-template-columns: 2fr 1fr 1fr 40px; gap:5px; margin-bottom:5px;";
+    div.innerHTML = `
+        <input type="text" placeholder="馬名" class="h-name" value="${data?data.name:''}">
+        <input type="number" step="0.1" class="h-odds" value="${data?data.initialOdds:'2.0'}">
+        <select class="h-rank">
+            ${[1,2,3,4,5,6,7,8].map(n => `<option value="${n}" ${data&&data.rank==n?'selected':''}>${n}着</option>`).join('')}
+        </select>
+        <button type="button" onclick="this.parentElement.remove()" style="color:var(--red); background:none; border:none; font-size:24px;">×</button>
+    `;
+    document.getElementById('horse-inputs').appendChild(div);
+}
+
+function editRace(id) {
+    const r = racePool.find(x => x.id === id);
+    if(!r) return;
+    document.getElementById('editingId').value = r.id;
+    document.getElementById('raceName').value = r.name;
+    document.getElementById('horse-inputs').innerHTML = "";
+    r.horses.forEach(h => addHorseField(h));
+    document.getElementById('form-title').innerText = "🏁 編集モード";
+    switchMode('edit');
+}
+
+async function deleteRace(id) {
+    if(confirm("削除しますか？")) {
+        racePool = racePool.filter(r => r.id !== id);
+        videoMap.delete(id);
+        savePoolToLocalStorage();
+        await updateRaceListUI();
+    }
+}
+
+function switchMode(mode) {
+    document.getElementById('registration-area').classList.toggle('hidden', mode !== 'edit');
+    document.getElementById('setup-screen').classList.toggle('hidden', mode !== 'play');
+    document.getElementById('tab-edit').classList.toggle('active', mode === 'edit');
+    document.getElementById('tab-play').classList.toggle('active', mode === 'play');
+}
+
+// --- 通信・その他 (既存ロジック) ---
+function initPeer(role) {
+    const room = document.getElementById('roomName').value;
+    if(!room) return alert("部屋名必須");
+    peer = new Peer(role === 'host' ? room : room + "_p" + Math.floor(Math.random()*99));
+    peer.on('open', () => {
+        log(role + " 接続OK");
+        document.getElementById('setup-screen').classList.add('hidden');
+        document.getElementById('mode-tabs').classList.add('hidden');
+        if(role === 'host') {
+            document.getElementById('host-screen').classList.remove('hidden');
+            peer.on('connection', c => {
+                connections.push(c);
+                c.on('data', d => { if(d.type==='BET') handleHostBet(d); });
+            });
+        } else {
+            document.getElementById('guest-screen').classList.remove('hidden');
+            guestConn = peer.connect(room);
+            guestConn.on('data', handleGuestData);
+        }
+    });
+}
+
+function handleHostBet(d) {
+    const h = currentRace.horses[d.idx];
+    h.pool += d.amount;
+    const total = currentRace.horses.reduce((s, x) => s + x.pool, 0) + 1000;
+    currentRace.horses.forEach(x => {
+        x.currentOdds = Math.max(1.1, (total / (x.pool + 200)) * 0.95);
+    });
+    updateHostOddsUI();
+    connections.forEach(c => c.send({ type: 'UPDATE', horses: currentRace.horses }));
+}
+
+function updateHostOddsUI() {
+    document.getElementById('host-odds-display').innerHTML = currentRace.horses.map((h, i) => `
+        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #333;">
+            <span>${h.name}</span>
+            <span><b style="color:var(--gold)">x${h.currentOdds.toFixed(2)}</b></span>
+        </div>
+    `).join('');
+}
+
+function pickRaceFromList() {
+    const playable = racePool.filter(r => videoMap.has(r.id));
+    if(!playable.length) return alert("動画準備済みのレースがありません。一度「編集」から動画を選んで保存してください。");
+    currentRace = JSON.parse(JSON.stringify(playable[Math.floor(Math.random()*playable.length)]));
+    document.getElementById('host-race-title').innerText = currentRace.name;
+    document.getElementById('startBtn').disabled = false;
+    updateHostOddsUI();
+    connections.forEach(c => c.send({ type: 'SYNC', name: currentRace.name, horses: currentRace.horses }));
+}
+
+function startRace() {
+    const v = document.getElementById('mainVideo');
+    v.src = videoMap.get(currentRace.id);
+    v.style.display = 'block';
+    v.play();
+    connections.forEach(c => c.send({ type: 'LOCK' }));
+    v.onended = () => {
+        v.style.display = 'none';
+        const win = currentRace.horses.find(h => h.rank === 1);
+        showResult(win.name, win.currentOdds);
+        connections.forEach(c => c.send({ type: 'RESULT', name: win.name, odds: win.currentOdds }));
+    };
+}
+
+function handleGuestData(d) {
+    if(d.type==='SYNC') {
+        document.getElementById('guest-race-name').innerText = d.name;
+        renderGuestBetting(d.horses);
+    } else if(d.type==='UPDATE') {
+        d.horses.forEach((h, i) => {
+            const el = document.getElementById(`g-odd-${i}`);
+            if(el) el.innerText = 'x' + h.currentOdds.toFixed(2);
+        });
+    } else if(d.type==='RESULT') {
+        showResult(d.name, d.odds);
+    } else if(d.type==='LOCK') {
+        document.querySelectorAll('#betting-area button').forEach(b => b.disabled = true);
+    }
+}
+
+function renderGuestBetting(horses) {
+    document.getElementById('betting-area').innerHTML = horses.map((h, i) => `
+        <div style="padding:10px 0; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
+            <div><b>${h.name}</b><br><small id="g-odd-${i}" style="color:var(--gold)">x${h.currentOdds.toFixed(2)}</small></div>
+            <button onclick="sendBet(${i})" style="background:var(--gold); border:none; padding:10px; border-radius:6px; font-weight:bold;">100枚賭ける</button>
+        </div>
+    `).join('');
+}
+
+function sendBet(idx) {
+    if(myChips >= 100) {
+        myChips -= 100;
+        document.getElementById('my-chips').innerText = myChips.toLocaleString();
+        guestConn.send({ type: 'BET', idx, amount: 100 });
+    } else alert("チップ不足");
+}
+
+function showResult(name, odds) {
+    document.getElementById('winner-name').innerText = name + " 1着！";
+    document.getElementById('winner-odds').innerText = `確定オッズ: x${odds.toFixed(2)}`;
+    document.getElementById('result-overlay').style.display = 'flex';
+}
+
+function closeResult() {
+    document.getElementById('result-overlay').style.display = 'none';
+}
+
+// ファイル保存・読込 (簡易版)
+function exportToFile() {
+    const blob = new Blob([JSON.stringify(racePool)], {type: 'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = "turf_data.json";
+    a.click();
+}
+function importFromFile() { document.getElementById('importFile').click(); }
+function handleFileSelect(e) {
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+        racePool = JSON.parse(ev.target.result);
+        savePoolToLocalStorage();
+        await updateRaceListUI();
+    };
+    reader.readAsText(e.target.files[0]);
+}
+async function clearAllData() {
+    if(confirm("全消去？")) {
+        racePool = [];
+        localStorage.clear();
+        const db = await openDB();
+        db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).clear();
+        location.reload();
+    }
+}
+
+window.onload = async () => { 
+    const saved = localStorage.getItem('turf_race_pool');
+    if(saved) racePool = JSON.parse(saved);
+    await updateRaceListUI();
+    resetForm(); 
+    log("システム READY"); 
+};
+</script>
+</body>
+</html>
