@@ -10,15 +10,16 @@
         body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--turf); color: #fff; margin: 0; padding: 10px; overflow-x: hidden; }
         .container { max-width: 600px; margin: auto; }
         .board { background: var(--panel); border: 2px solid var(--gold); border-radius: 15px; padding: 20px; margin-bottom: 20px; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
-        .btn { background: linear-gradient(180deg, var(--gold) 0%, #b8860b 100%); border: none; padding: 15px; color: #000; font-weight: bold; border-radius: 8px; width: 100%; margin: 10px 0; cursor: pointer; font-size: 16px; box-shadow: 0 4px #664d00; transition: 0.1s; }
+        .btn { background: linear-gradient(180deg, var(--gold) 0%, #b8860b 100%); border: none; padding: 15px; color: #000; font-weight: bold; border-radius: 8px; width: 100%; margin: 10px 0; cursor: pointer; font-size: 16px; }
         .btn:active { transform: translateY(2px); box-shadow: 0 2px #664d00; }
         .mini-btn { padding: 10px; font-size: 12px; border-radius: 5px; border: none; cursor: pointer; color: #fff; font-weight: bold; margin: 2px; }
         .hidden { display: none !important; }
         input, select { width: 100%; padding: 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #444; margin: 5px 0; background: #111; color: #fff; }
         .race-card { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 10px; margin-top: 10px; border-left: 5px solid var(--blue); display: flex; justify-content: space-between; align-items: center; }
-        #countdown-overlay { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 200px; font-weight: bold; color: var(--gold); z-index: 10001; display: none; pointer-events: none; text-shadow: 0 0 30px rgba(0,0,0,0.8); }
-        #result-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); z-index: 10000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        #countdown-overlay { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 200px; font-weight: bold; color: var(--gold); z-index: 10001; display: none; pointer-events: none; }
+        #result-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); z-index: 10000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         .horse-input-row { display: grid; grid-template-columns: 2fr 1fr 1fr 40px; gap: 5px; margin-bottom: 10px; }
+        .config-preset { background: rgba(0,255,136,0.1); padding: 10px; border-radius: 8px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -35,7 +36,6 @@
     <div id="res-final-part" class="hidden">
         <h2 style="color:var(--gold); font-size: 2.5em;">🏆 FINAL RANKING 🏆</h2>
         <div id="final-rank-list" style="width:300px; margin:auto; font-size:1.5em; line-height:1.6;"></div>
-        <!-- 削除：ここにボタンは置かず操作パネルで一括操作 -->
     </div>
 </div>
 
@@ -48,8 +48,25 @@
     <!-- 1. 初期設定 -->
     <div id="setup-screen" class="section board">
         <h2 style="text-align:center; color:var(--gold);">G1 TURF CASINO</h2>
+        
+        <!-- 保存済み設定読み込み -->
+        <div class="config-preset">
+            <label style="font-size:12px; color:#aaa;">💾 保存済み設定から読み込む</label>
+            <div style="display:flex; gap:5px;">
+                <select id="presetSelect" style="flex:1;">
+                    <option value="">-- 新規設定 --</option>
+                </select>
+                <button class="mini-btn" style="background:var(--blue); flex:0.5;" onclick="loadPreset()">読込</button>
+                <button class="mini-btn" style="background:#666; flex:0.5;" onclick="deletePreset()">削</button>
+            </div>
+        </div>
+
         <input type="text" id="roomName" placeholder="合言葉">
         <input type="number" id="seriesCount" value="1" placeholder="総レース数">
+        
+        <!-- 設定保存 -->
+        <button class="mini-btn" style="background:#444; width:100%; margin:10px 0;" onclick="savePreset()">⚙️ この設定を保存</button>
+        
         <button class="btn" onclick="initPeer('monitor')">モニター起動</button>
         <button class="btn" onclick="initPeer('controller')" style="background:var(--blue); color:#fff;">操作パネル接続</button>
         <button class="btn" onclick="initPeer('guest')" style="background:#fff; color:#000;">ゲスト参加</button>
@@ -120,12 +137,71 @@ let peer = null, connections = [], connToMonitor = null;
 let currentRace = null, myChips = 1000, currentRaceNum = 0, seriesTotal = 0;
 let tempBets = {}, confirmedBets = {}, guestBalances = {}, myRole = '';
 const STORAGE_KEY = 'turf_v24_final';
+const PRESET_KEY = 'turf_presets';
 
 window.onload = () => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if(saved) racePool = JSON.parse(saved);
     updateRaceListUI();
+    updatePresetSelect();
 };
+
+// --- 設定プリセット管理 ---
+function updatePresetSelect() {
+    const presets = getPresets();
+    const select = document.getElementById('presetSelect');
+    select.innerHTML = '<option value="">-- 新規設定 --</option>';
+    presets.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.innerText = `${p.name} (${p.roomName})`;
+        select.appendChild(opt);
+    });
+}
+
+function getPresets() {
+    const data = localStorage.getItem(PRESET_KEY);
+    return data ? JSON.parse(data) : [];
+}
+
+function savePreset() {
+    const name = prompt('この設定に名前をつけてください:');
+    if(!name) return;
+    const presets = getPresets();
+    const preset = {
+        id: 'preset_' + Date.now(),
+        name: name,
+        roomName: document.getElementById('roomName').value,
+        seriesCount: document.getElementById('seriesCount').value
+    };
+    presets.push(preset);
+    localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+    updatePresetSelect();
+    alert(`「${name}」として保存しました`);
+}
+
+function loadPreset() {
+    const presetId = document.getElementById('presetSelect').value;
+    if(!presetId) return;
+    const presets = getPresets();
+    const preset = presets.find(p => p.id === presetId);
+    if(preset) {
+        document.getElementById('roomName').value = preset.roomName;
+        document.getElementById('seriesCount').value = preset.seriesCount;
+    }
+}
+
+function deletePreset() {
+    const presetId = document.getElementById('presetSelect').value;
+    if(!presetId) return;
+    if(!confirm('この設定を削除しますか？')) return;
+    let presets = getPresets();
+    presets = presets.filter(p => p.id !== presetId);
+    localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+    updatePresetSelect();
+    document.getElementById('presetSelect').value = '';
+    alert('削除しました');
+}
 
 // --- 通信コア ---
 function initPeer(role) {
@@ -222,7 +298,6 @@ function handleData(d, senderConn = null) {
         if(myRole === 'controller') updateCtrlUI('next-action');
     }
     if(d.type === 'RESET_STATE') {
-        // 通信は切らずに初期画面状態へ
         document.getElementById('result-screen').style.display = 'none';
         if(myRole === 'controller') {
             updateCtrlUI('initial');
@@ -327,18 +402,18 @@ function updateCtrlUI(state) {
 // 登録・管理
 function updateRaceListUI() {
     const container = document.getElementById('race-list-display');
-    container.innerHTML = racePool.map(r => `<div class="race-card"><div><b>${r.name}</b></div><div><button class="mini-btn" style="background:var(--blue);" onclick="editRace('${r.id}')">編集</button><button class="mini-btn" style="background:#444;" onclick="deleteRace('${r.id}')">削除</button></div></div>`).join('');
+    container.innerHTML = racePool.map(r => `<div class="race-card"><div><b>${r.name}</b></div><div><button class="mini-btn" style="background:var(--blue);" onclick="editRace('${r.id}')">編集</button> <button class="mini-btn" style="background:var(--red);" onclick="deleteRace('${r.id}')">削除</button></div></div>`).join('');
 }
 function openEditor() { showSection('registration-area'); resetForm(); updateRaceListUI(); }
 function addHorseField(data = null) {
     const div = document.createElement('div'); div.className = "horse-input-row";
-    div.innerHTML = `<input type="text" placeholder="馬名" class="h-name" value="${data?data.name:''}"> <input type="number" step="0.1" class="h-odds" value="${data?data.initialOdds:'2.0'}"> <select class="h-rank">${[1,2,3,4,5,6,7,8].map(n => `<option value="${n}" ${data&&data.rank==n?'selected':''}>${n}着</option>`).join('')}</select> <button class="mini-btn" onclick="this.parentElement.remove()" style="background:none; color:var(--red); font-size:20px;">×</button>`;
+    div.innerHTML = `<input type="text" placeholder="馬名" class="h-name" value="${data?data.name:''}"> <input type="number" step="0.1" class="h-odds" value="${data?data.initialOdds:'2.0'}"> <select class="h-rank" style="padding:8px;"><option value="">順位</option><option value="1" ${data?.rank===1?'selected':''}>1位</option><option value="2" ${data?.rank===2?'selected':''}>2位</option><option value="3" ${data?.rank===3?'selected':''}>3位</option></select> <button class="mini-btn" style="background:var(--red); padding:8px; margin:0;" onclick="this.parentElement.remove()">×</button>`;
     document.getElementById('horse-inputs').appendChild(div);
 }
 function applyToPool() {
     const name = document.getElementById('raceName').value.trim(); if(!name) return;
     const id = document.getElementById('editingId').value || "R_" + Date.now();
-    const horses = Array.from(document.querySelectorAll('.horse-input-row')).map(row => ({ name: row.querySelector('.h-name').value || "無名", initialOdds: parseFloat(row.querySelector('.h-odds').value) || 2.0, rank: parseInt(row.querySelector('.h-rank').value) || 1 }));
+    const horses = Array.from(document.querySelectorAll('.horse-input-row')).map(row => ({ name: row.querySelector('.h-name').value || "無名", initialOdds: parseFloat(row.querySelector('.h-odds').value) || 1.5, rank: parseInt(row.querySelector('.h-rank').value) || 0 }));
     const file = document.getElementById('videoFile').files[0]; if(file) videoMap.set(id, URL.createObjectURL(file));
     const idx = racePool.findIndex(r => r.id === id);
     if(idx > -1) racePool[idx] = {id, name, horses}; else racePool.push({id, name, horses});
@@ -357,7 +432,7 @@ function deleteRace(id) { if(!confirm("削除しますか？")) return; racePool
 function renderMonitorUI() {
     document.getElementById('mon-status').innerText = `RACE ${currentRaceNum} / ${seriesTotal}`;
     document.getElementById('mon-race-name').innerText = currentRace.name;
-    document.getElementById('mon-odds-list').innerHTML = currentRace.horses.map(h => `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #222;"><span>${h.name}</span><b>x${h.currentOdds.toFixed(2)}</b></div>`).join('');
+    document.getElementById('mon-odds-list').innerHTML = currentRace.horses.map(h => `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #222;"><span>${h.name}</span> <span style="color:var(--gold)">x${h.currentOdds.toFixed(2)} (Pool: ${h.pool})</span></div>`).join('');
 }
 function updateOdds() {
     const total = currentRace.horses.reduce((s, h) => s + h.pool, 0);
