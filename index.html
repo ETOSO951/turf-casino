@@ -101,7 +101,7 @@
 
     <!-- 3. 操作パネル -->
     <div id="controller-screen" class="section hidden board">
-        <h3 id="ctrl-race-title" style="text-align:center; color:var(--gold);">READY</h3>
+        <h3 id="ctrl-race-title" style="text-align:center; color:var(--gold);">待機中</h3>
         <div id="ctrl-pre-race" class="hidden">
             <button class="btn" onclick="requestCountdown()" style="background:var(--red); color:#fff;">🔥 カウントダウン開始</button>
         </div>
@@ -120,15 +120,15 @@
     <!-- 4. モニター -->
     <div id="monitor-screen" class="section hidden board" style="text-align:center;">
         <p id="mon-status" style="color:var(--accent); margin:0;"></p>
-        <h1 id="mon-race-name" style="color:var(--gold); font-size:2.5em; margin:10px 0;">READY</h1>
+        <h1 id="mon-race-name" style="color:var(--gold); font-size:2.5em; margin:10px 0;">待機中</h1>
         <div id="mon-odds-list" style="text-align:left; border-top:1px solid #333; padding-top:10px;"></div>
     </div>
 
     <!-- 5. ゲスト名入力 -->
     <div id="guest-join-screen" class="section hidden board">
-        <h3 style="text-align:center;">ようこそ</h3>
-        <input type="text" id="playerName" placeholder="お名前を入力">
-        <button class="btn" onclick="guestJoin()">入場</button>
+        <h3 style="text-align:center;">参加登録</h3>
+        <input type="text" id="playerName" placeholder="名前を入力">
+        <button class="btn" onclick="guestJoin()">参加</button>
     </div>
 
     <!-- 6. ゲスト馬券画面 -->
