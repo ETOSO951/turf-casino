@@ -6,43 +6,21 @@
     <title>G1 TURF CASINO - v24 Seamless Reset</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --turf: #0a2e1a; --gold: #ffd700; --panel: rgba(0,0,0,0.95); --accent: #00ff88; --red: #ff4757; --blue: #54a0ff; --silver: #c0c0c0; --bronze: #cd7f32; }
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: linear-gradient(135deg, var(--turf) 0%, #0d1f2d 100%); color: #fff; margin: 0; padding: 10px; overflow-x: hidden; min-height: 100vh; }
+        :root { --turf: #0a2e1a; --gold: #ffd700; --panel: rgba(0,0,0,0.95); --accent: #00ff88; --red: #ff4757; --blue: #54a0ff; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--turf); color: #fff; margin: 0; padding: 10px; overflow-x: hidden; }
         .container { max-width: 600px; margin: auto; }
-        .board { background: rgba(0,0,0,0.7); border: 2px solid var(--gold); border-radius: 15px; padding: 20px; margin-bottom: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
-        .btn { background: linear-gradient(180deg, var(--gold) 0%, #b8860b 100%); border: none; padding: 15px; color: #000; font-weight: bold; border-radius: 10px; width: 100%; margin: 10px 0; cursor: pointer; font-size: 16px; box-shadow: 0 4px 15px rgba(255,215,0,0.3); transition: all 0.2s; }
-        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(255,215,0,0.5); }
+        .board { background: var(--panel); border: 2px solid var(--gold); border-radius: 15px; padding: 20px; margin-bottom: 20px; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+        .btn { background: linear-gradient(180deg, var(--gold) 0%, #b8860b 100%); border: none; padding: 15px; color: #000; font-weight: bold; border-radius: 8px; width: 100%; margin: 10px 0; cursor: pointer; font-size: 16px; }
         .btn:active { transform: translateY(2px); box-shadow: 0 2px #664d00; }
-        .mini-btn { padding: 10px; font-size: 12px; border-radius: 5px; border: none; cursor: pointer; color: #fff; font-weight: bold; margin: 2px; transition: all 0.2s; }
-        .mini-btn:hover { transform: translateY(-1px); }
+        .mini-btn { padding: 10px; font-size: 12px; border-radius: 5px; border: none; cursor: pointer; color: #fff; font-weight: bold; margin: 2px; }
         .hidden { display: none !important; }
-        input, select { width: 100%; padding: 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #444; margin: 5px 0; background: rgba(0,0,0,0.6); color: #fff; font-size: 14px; }
-        input:focus, select:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 10px rgba(255,215,0,0.3); background: rgba(0,0,0,0.8); }
-        .race-card { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 10px; margin-top: 10px; border-left: 5px solid var(--blue); display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; }
-        .race-card:hover { background: rgba(255,255,255,0.1); transform: translateX(5px); }
-        #countdown-overlay { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 200px; font-weight: bold; color: var(--gold); z-index: 10001; display: none; pointer-events: none; text-shadow: 0 0 30px rgba(255,215,0,0.8); }
-        #result-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, rgba(0,0,0,0.95), rgba(10,46,26,0.9)); z-index: 10000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        input, select { width: 100%; padding: 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #444; margin: 5px 0; background: #111; color: #fff; }
+        .race-card { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 10px; margin-top: 10px; border-left: 5px solid var(--blue); display: flex; justify-content: space-between; align-items: center; }
+        #countdown-overlay { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 200px; font-weight: bold; color: var(--gold); z-index: 10001; display: none; pointer-events: none; }
+        #result-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); z-index: 10000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         .horse-input-row { display: grid; grid-template-columns: 2fr 1fr 1fr 40px; gap: 5px; margin-bottom: 10px; }
-        .config-preset { background: rgba(0,255,136,0.1); padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid var(--accent); }
-        .rank-item { background: linear-gradient(90deg, rgba(255,255,255,0.05), rgba(0,255,136,0.1)); padding: 15px; border-radius: 10px; margin-bottom: 12px; display: flex; align-items: center; gap: 15px; border-left: 4px solid var(--gold); }
-        .rank-medal { font-size: 2.5em; min-width: 50px; text-align: center; }
-        .rank-info { flex: 1; }
-        .rank-name { font-size: 1.3em; font-weight: bold; color: var(--gold); margin-bottom: 5px; }
-        .rank-chips { font-size: 1.1em; color: var(--accent); }
-        .result-winner { font-size: 5em; font-weight: bold; color: var(--gold); text-shadow: 0 0 20px rgba(255,215,0,0.6); margin: 20px 0; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-        .payout-item { background: rgba(0,255,136,0.15); padding: 12px 15px; border-radius: 8px; margin: 8px 0; display: flex; justify-content: space-between; align-items: center; border-left: 3px solid var(--accent); }
-        .payout-name { font-weight: bold; font-size: 1.1em; }
-        .payout-amount { color: var(--accent); font-size: 1.2em; font-weight: bold; }
-        .betting-card { background: linear-gradient(135deg, rgba(84,160,255,0.1), rgba(0,255,136,0.05)); padding: 15px; border-radius: 10px; margin-bottom: 12px; border: 1px solid rgba(84,160,255,0.3); }
-        .horse-name { font-size: 1.2em; font-weight: bold; color: #fff; margin-bottom: 8px; }
-        .odds-display { color: var(--gold); font-size: 1.3em; font-weight: bold; }
-        .bet-buttons { display: flex; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
-        .status-line { font-size: 0.9em; color: #aaa; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 5px; }
-        .nav-tabs { background: rgba(0,0,0,0.5); padding: 10px; border-radius: 10px; }
-        #mon-race-name { text-shadow: 0 0 20px rgba(255,215,0,0.4); }
-        .horse-stat { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .horse-stat:last-child { border-bottom: none; }
+        .config-card { background: rgba(0,255,136,0.1); padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 3px solid var(--accent); display: flex; justify-content: space-between; align-items: center; }
+        .config-card.active { background: rgba(0,255,136,0.25); border-left: 3px solid var(--gold); }
     </style>
 </head>
 <body>
@@ -52,101 +30,112 @@
 <!-- リザルト画面 -->
 <div id="result-screen">
     <div id="res-race-part">
-        <h1 style="color:var(--accent); font-size:3em; margin:0 0 20px 0;">🏁 RACE RESULT 🏁</h1>
-        <div class="result-winner" id="res-winner">---</div>
-        <div id="res-payout-list" style="width:100%; max-width:400px; margin-top:30px;"></div>
+        <h1 style="color:var(--accent);">RACE RESULT</h1>
+        <div id="res-winner" style="font-size:4em; color:var(--gold);">---</div>
+        <div id="res-payout-list" style="width:300px; margin-top:20px; font-size:1.2em;"></div>
     </div>
     <div id="res-final-part" class="hidden">
-        <h2 style="color:var(--gold); font-size: 3em; margin:0 0 40px 0;">🏆 FINAL RANKING 🏆</h2>
-        <div id="final-rank-list" style="width:100%; max-width:450px;"></div>
+        <h2 style="color:var(--gold); font-size: 2.5em;">🏆 FINAL RANKING 🏆</h2>
+        <div id="final-rank-list" style="width:300px; margin:auto; font-size:1.5em; line-height:1.6;"></div>
     </div>
 </div>
 
 <div class="container">
-    <div id="nav-tabs" class="nav-tabs" style="display:flex; gap:10px; margin-bottom:15px;">
-        <button class="btn" onclick="showSection('setup-screen')" style="margin:0; flex:1; font-size:14px; padding:12px;">設定</button>
-        <button class="btn" onclick="openEditor()" style="margin:0; flex:1; background:#333; color:#fff; font-size:14px; padding:12px;">データ管理</button>
+    <div id="nav-tabs" style="display:flex; gap:10px; margin-bottom:15px;">
+        <button class="btn" onclick="showSection('setup-screen')" style="margin:0; flex:1;">設定</button>
+        <button class="btn" onclick="openDataManager()" style="margin:0; flex:1; background:#333; color:#fff;">データ管理</button>
     </div>
 
     <!-- 1. 初期設定 -->
     <div id="setup-screen" class="section board">
-        <h2 style="text-align:center; color:var(--gold); font-size:2.5em; margin-top:0; text-shadow: 0 0 10px rgba(255,215,0,0.5);">🎪 G1 TURF CASINO</h2>
-        
-        <!-- 保存済み設定読み込み -->
-        <div class="config-preset">
-            <label style="font-size:12px; color:#aaa; display:block; margin-bottom:8px;">💾 保存済み設定から読み込む</label>
-            <div style="display:flex; gap:5px;">
-                <select id="presetSelect" style="flex:1;">
-                    <option value="">-- 新規設定 --</option>
-                </select>
-                <button class="mini-btn" style="background:var(--blue); flex:0.5;" onclick="loadPreset()">読込</button>
-                <button class="mini-btn" style="background:#666; flex:0.5;" onclick="deletePreset()">削</button>
-            </div>
-        </div>
-
-        <input type="text" id="roomName" placeholder="🔐 合言葉を入力">
-        <input type="number" id="seriesCount" value="1" placeholder="総レース数" min="1" max="10">
-        
-        <!-- 設定保存 -->
-        <button class="mini-btn" style="background:#444; width:100%; margin:10px 0;" onclick="savePreset()">⚙️ この設定を保存</button>
-        
-        <button class="btn" onclick="initPeer('monitor')">📺 モニター起動</button>
-        <button class="btn" onclick="initPeer('controller')" style="background:var(--blue); color:#fff;">🎮 操作パネル接続</button>
-        <button class="btn" onclick="initPeer('guest')" style="background:#fff; color:#000;">👥 ゲスト参加</button>
+        <h2 style="text-align:center; color:var(--gold);">G1 TURF CASINO</h2>
+        <input type="text" id="roomName" placeholder="合言葉">
+        <input type="number" id="seriesCount" value="1" placeholder="総レース数">
+        <button class="btn" onclick="initPeer('monitor')">モニター起動</button>
+        <button class="btn" onclick="initPeer('controller')" style="background:var(--blue); color:#fff;">操作パネル接続</button>
+        <button class="btn" onclick="initPeer('guest')" style="background:#fff; color:#000;">ゲスト参加</button>
     </div>
 
     <!-- 2. データ管理 -->
-    <div id="registration-area" class="section hidden">
-        <div class="board">
-            <h3 id="form-title" style="margin:0 0 15px 0; color:var(--gold); font-size:1.5em;">🏁 レース登録</h3>
-            <input type="hidden" id="editingId">
-            <input type="text" id="raceName" placeholder="🏇 レース名">
-            <input type="file" id="videoFile" accept="video/*">
-            <div id="horse-inputs" style="margin-top:15px;"></div>
-            <button class="mini-btn" onclick="addHorseField()" style="background:#444; width:100%; margin:10px 0;">+ 馬を追加</button>
-            <button id="apply-btn" class="btn" onclick="applyToPool()" style="background:var(--accent); color:#000; margin-bottom:10px;">💾 保存して一覧を更新</button>
-            <button id="cancel-edit-btn" class="mini-btn hidden" onclick="resetForm()" style="background:#666; width:100%;">キャンセル</button>
+    <div id="data-manager" class="section hidden board">
+        <h2 style="text-align:center; color:var(--gold); margin-top:0;">⚙️ データ管理</h2>
+        
+        <!-- タブ -->
+        <div style="display:flex; gap:10px; margin-bottom:20px;">
+            <button class="mini-btn" style="background:var(--blue); flex:1;" onclick="switchDataTab('config')">設定プリセット</button>
+            <button class="mini-btn" style="background:#666; flex:1;" onclick="switchDataTab('race')">レース管理</button>
         </div>
-        <div id="race-list-display"></div>
+
+        <!-- 設定プリセット管理タブ -->
+        <div id="config-tab">
+            <div style="margin-bottom:15px;">
+                <label style="font-size:12px; color:#aaa;">現在の設定値</label>
+                <input type="text" id="mgr-roomName" placeholder="合言葉">
+                <input type="number" id="mgr-seriesCount" value="1" placeholder="総レース数" min="1" max="10">
+                <button class="btn" onclick="saveNewPreset()" style="background:var(--accent); color:#000; font-size:14px; padding:12px;">💾 新規保存</button>
+            </div>
+
+            <div>
+                <label style="font-size:12px; color:#aaa; display:block; margin-bottom:10px;">📂 保存済みプリセット</label>
+                <div id="preset-list"></div>
+            </div>
+        </div>
+
+        <!-- レース管理タブ -->
+        <div id="race-tab" class="hidden">
+            <div class="board" style="background:rgba(0,0,0,0.5); border:1px solid #444; padding:15px;">
+                <h3 id="form-title" style="margin:0 0 15px 0; color:var(--gold);">🏁 レース登録</h3>
+                <input type="hidden" id="editingId">
+                <input type="text" id="raceName" placeholder="レース名">
+                <input type="file" id="videoFile" accept="video/*">
+                <div id="horse-inputs" style="margin-top:10px;"></div>
+                <button class="mini-btn" onclick="addHorseField()" style="background:#444; width:100%; margin:10px 0;">+ 馬を追加</button>
+                <button id="apply-btn" class="btn" onclick="applyToPool()" style="background:var(--accent); color:#000; font-size:14px; padding:12px;">保存して一覧を更新</button>
+                <button id="cancel-edit-btn" class="mini-btn hidden" onclick="resetForm()" style="background:#666; width:100%;">キャンセル</button>
+            </div>
+            <div id="race-list-display" style="margin-top:20px;"></div>
+        </div>
+
+        <button class="btn" onclick="showSection('setup-screen')" style="background:#333; margin-top:20px;">← 戻る</button>
     </div>
 
     <!-- 3. 操作パネル -->
     <div id="controller-screen" class="section hidden board">
-        <h3 id="ctrl-race-title" style="text-align:center; color:var(--gold); font-size:2em; margin:0 0 20px 0;">⏳ READY</h3>
+        <h3 id="ctrl-race-title" style="text-align:center; color:var(--gold);">READY</h3>
         <div id="ctrl-pre-race" class="hidden">
             <button class="btn" onclick="requestCountdown()" style="background:var(--red); color:#fff;">🔥 カウントダウン開始</button>
         </div>
         <div id="ctrl-post-race" class="hidden">
-            <button class="btn" onclick="requestCloseResult()" style="background:var(--blue); color:#fff;">👁️ リザルトを閉じる</button>
+            <button class="btn" onclick="requestCloseResult()" style="background:var(--blue); color:#fff;">リザルトを閉じる</button>
         </div>
         <div id="ctrl-final-action" class="hidden">
-            <button class="btn" onclick="requestSystemReset()" style="background:var(--accent); color:#000;">🔄 最初からやり直す</button>
+            <button class="btn" onclick="requestSystemReset()" style="background:var(--accent); color:#000;">最初からやり直す</button>
         </div>
         <div id="ctrl-next-action" class="hidden">
-            <button class="btn" onclick="requestPickRace()" style="background:var(--gold); color:#000;">🎲 次のレースを抽選</button>
+            <button class="btn" onclick="requestPickRace()" style="background:var(--gold); color:#000;">次のレースを抽選</button>
         </div>
-        <button id="initialPickBtn" class="btn" onclick="requestPickRace()" style="margin-top:0;">🎲 レースを抽選開始</button>
+        <button id="initialPickBtn" class="btn" onclick="requestPickRace()">レースを抽選開始</button>
     </div>
 
     <!-- 4. モニター -->
     <div id="monitor-screen" class="section hidden board" style="text-align:center;">
-        <p id="mon-status" style="color:var(--accent); margin:0 0 10px 0; font-size:1.2em; font-weight:bold;">RACE STATUS</p>
-        <h1 id="mon-race-name" style="color:var(--gold); font-size:2.5em; margin:10px 0 20px 0;">READY</h1>
-        <div id="mon-odds-list" style="text-align:left; border-top:2px solid rgba(255,215,0,0.3); padding-top:15px;"></div>
+        <p id="mon-status" style="color:var(--accent); margin:0;"></p>
+        <h1 id="mon-race-name" style="color:var(--gold); font-size:2.5em; margin:10px 0;">READY</h1>
+        <div id="mon-odds-list" style="text-align:left; border-top:1px solid #333; padding-top:10px;"></div>
     </div>
 
     <!-- 5. ゲスト名入力 -->
     <div id="guest-join-screen" class="section hidden board">
-        <h3 style="text-align:center; color:var(--gold); font-size:1.8em; margin-top:0;">👋 ようこそ</h3>
-        <input type="text" id="playerName" placeholder="💰 お名前を入力">
-        <button class="btn" onclick="guestJoin()" style="margin-top:20px;">🎫 入場</button>
+        <h3 style="text-align:center;">ようこそ</h3>
+        <input type="text" id="playerName" placeholder="お名前を入力">
+        <button class="btn" onclick="guestJoin()">入場</button>
     </div>
 
     <!-- 6. ゲスト馬券画面 -->
     <div id="guest-screen" class="section hidden board">
-        <div style="display:flex; justify-content:space-between; margin-bottom:20px; border-bottom:2px solid rgba(255,215,0,0.3); padding-bottom:15px;">
-            <b id="display-name" style="color:var(--gold); font-size:1.3em;">---</b>
-            <span style="font-weight:bold; font-size:1.3em;">💰 <b id="my-chips" style="color:var(--accent);">1000</b></span>
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #333; padding-bottom:10px;">
+            <b id="display-name" style="color:var(--gold);">---</b>
+            <span>CHIPS: <b id="my-chips" style="color:var(--accent);">1000</b></span>
         </div>
         <div id="betting-area"></div>
     </div>
@@ -161,69 +150,101 @@ let currentRace = null, myChips = 1000, currentRaceNum = 0, seriesTotal = 0;
 let tempBets = {}, confirmedBets = {}, guestBalances = {}, myRole = '';
 const STORAGE_KEY = 'turf_v24_final';
 const PRESET_KEY = 'turf_presets';
+const DEFAULT_PRESET_KEY = 'turf_default_preset';
 
 window.onload = () => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if(saved) racePool = JSON.parse(saved);
     updateRaceListUI();
-    updatePresetSelect();
+    updatePresetList();
+    loadDefaultPreset();
 };
 
 // --- 設定プリセット管理 ---
-function updatePresetSelect() {
-    const presets = getPresets();
-    const select = document.getElementById('presetSelect');
-    select.innerHTML = '<option value="">-- 新規設定 --</option>';
-    presets.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.id;
-        opt.innerText = `${p.name} (${p.roomName})`;
-        select.appendChild(opt);
-    });
-}
-
 function getPresets() {
     const data = localStorage.getItem(PRESET_KEY);
     return data ? JSON.parse(data) : [];
 }
 
-function savePreset() {
-    const name = prompt('この設定に名前をつけてください:');
+function saveNewPreset() {
+    const name = prompt('このプリセットに名前をつけてください:');
     if(!name) return;
     const presets = getPresets();
     const preset = {
         id: 'preset_' + Date.now(),
         name: name,
-        roomName: document.getElementById('roomName').value,
-        seriesCount: document.getElementById('seriesCount').value
+        roomName: document.getElementById('mgr-roomName').value,
+        seriesCount: document.getElementById('mgr-seriesCount').value,
+        isDefault: false
     };
     presets.push(preset);
     localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
-    updatePresetSelect();
+    updatePresetList();
     alert(`「${name}」として保存しました`);
 }
 
-function loadPreset() {
-    const presetId = document.getElementById('presetSelect').value;
-    if(!presetId) return;
+function updatePresetList() {
+    const presets = getPresets();
+    const defaultPresetId = localStorage.getItem(DEFAULT_PRESET_KEY);
+    const container = document.getElementById('preset-list');
+    container.innerHTML = presets.map(p => `
+        <div class="config-card ${p.id === defaultPresetId ? 'active' : ''}">
+            <div>
+                <div style="font-weight:bold;">${p.name}</div>
+                <div style="font-size:12px; color:#aaa;">🔐 ${p.roomName} / ${p.seriesCount}レース ${p.id === defaultPresetId ? '⭐ デフォルト' : ''}</div>
+            </div>
+            <div style="display:flex; gap:3px;">
+                <button class="mini-btn" style="background:var(--blue); padding:6px 10px;" onclick="applyPreset('${p.id}')">読込</button>
+                <button class="mini-btn" style="background:var(--gold); color:#000; padding:6px 10px;" onclick="setDefaultPreset('${p.id}')">デフォ</button>
+                <button class="mini-btn" style="background:var(--red); padding:6px 10px;" onclick="deletePreset('${p.id}')">削</button>
+            </div>
+        </div>`).join('');
+}
+
+function applyPreset(presetId) {
     const presets = getPresets();
     const preset = presets.find(p => p.id === presetId);
     if(preset) {
+        document.getElementById('mgr-roomName').value = preset.roomName;
+        document.getElementById('mgr-seriesCount').value = preset.seriesCount;
         document.getElementById('roomName').value = preset.roomName;
         document.getElementById('seriesCount').value = preset.seriesCount;
     }
 }
 
-function deletePreset() {
-    const presetId = document.getElementById('presetSelect').value;
-    if(!presetId) return;
-    if(!confirm('この設定を削除しますか？')) return;
+function setDefaultPreset(presetId) {
+    localStorage.setItem(DEFAULT_PRESET_KEY, presetId);
+    updatePresetList();
+    alert('デフォルトプリセットに設定しました');
+}
+
+function deletePreset(presetId) {
+    if(!confirm('このプリセットを削除しますか？')) return;
     let presets = getPresets();
     presets = presets.filter(p => p.id !== presetId);
     localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
-    updatePresetSelect();
-    document.getElementById('presetSelect').value = '';
+    const defaultId = localStorage.getItem(DEFAULT_PRESET_KEY);
+    if(defaultId === presetId) localStorage.removeItem(DEFAULT_PRESET_KEY);
+    updatePresetList();
     alert('削除しました');
+}
+
+function loadDefaultPreset() {
+    const defaultPresetId = localStorage.getItem(DEFAULT_PRESET_KEY);
+    if(defaultPresetId) {
+        applyPreset(defaultPresetId);
+    }
+}
+
+function switchDataTab(tab) {
+    document.getElementById('config-tab').classList.add('hidden');
+    document.getElementById('race-tab').classList.add('hidden');
+    if(tab === 'config') {
+        document.getElementById('config-tab').classList.remove('hidden');
+    } else {
+        document.getElementById('race-tab').classList.remove('hidden');
+        updateRaceListUI();
+    }
 }
 
 // --- 通信コア ---
@@ -301,7 +322,7 @@ function handleData(d, senderConn = null) {
         currentRace = d.race; currentRaceNum = d.num; seriesTotal = d.total;
         tempBets = {}; confirmedBets = {};
         document.getElementById('result-screen').style.display = 'none';
-        if(myRole === 'controller') { updateCtrlUI('pre-race'); document.getElementById('ctrl-race-title').innerText = `🏇 RACE ${currentRaceNum}/${seriesTotal}`; }
+        if(myRole === 'controller') { updateCtrlUI('pre-race'); document.getElementById('ctrl-race-title').innerText = `RACE ${currentRaceNum}/${seriesTotal}`; }
         if(myRole === 'guest') renderGuestBetting();
     }
     if(d.type === 'UPDATE_STATE') {
@@ -324,7 +345,7 @@ function handleData(d, senderConn = null) {
         document.getElementById('result-screen').style.display = 'none';
         if(myRole === 'controller') {
             updateCtrlUI('initial');
-            document.getElementById('ctrl-race-title').innerText = "⏳ READY";
+            document.getElementById('ctrl-race-title').innerText = "READY";
         }
         if(myRole === 'guest') {
             myChips = 1000;
@@ -379,23 +400,20 @@ function confirmBet(i) {
     connToMonitor.send({ type: 'BET', idx: i, amount: a });
     tempBets[i] = 0; updateBetRow(i);
 }
-function updateBetRow(i) { document.getElementById(`g-status-${i}`).innerText = `確定: ${confirmedBets[i]||0} / 準備: ${tempBets[i]||0}`; }
+function updateBetRow(i) { document.getElementById(`g-status-${i}`).innerText = `確定:${confirmedBets[i]||0} / 準備:${tempBets[i]||0}`; }
 function updateGuestChipsUI() { document.getElementById('my-chips').innerText = myChips; }
 function updateGuestOddsUI(){ currentRace.horses.forEach((h,i) => { const el=document.getElementById(`g-odd-${i}`); if(el) el.innerText='x'+h.currentOdds.toFixed(2); }); }
 
 function renderGuestBetting() {
     document.getElementById('betting-area').innerHTML = currentRace.horses.map((h, i) => `
-        <div class="betting-card">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <div class="horse-name">🏇 ${h.name}</div>
-                <div class="odds-display">x${h.currentOdds.toFixed(2)}</div>
-            </div>
-            <div class="status-line" id="g-status-${i}">確定: 0 / 準備: 0</div>
-            <div class="bet-buttons">
+        <div class="board" style="padding:15px; margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><b>${h.name}</b> <span id="g-odd-${i}" style="color:var(--gold)">x${h.currentOdds.toFixed(2)}</span></div>
+            <div id="g-status-${i}" style="font-size:12px; color:#aaa; margin-bottom:10px;">確定:0 / 準備:0</div>
+            <div style="display:flex; gap:5px;">
                 <button class="mini-btn" style="background:#444; flex:1;" onclick="changeBet(${i},10)">+10</button>
                 <button class="mini-btn" style="background:#444; flex:1;" onclick="changeBet(${i},100)">+100</button>
                 <button class="mini-btn" style="background:var(--red); flex:1;" onclick="cancelBet(${i})">取消</button>
-                <button class="mini-btn" style="background:var(--accent); color:#000; flex:1.5; font-weight:bold;" onclick="confirmBet(${i})">確定</button>
+                <button class="mini-btn" style="background:var(--accent); color:#000; flex:1.5;" onclick="confirmBet(${i})">確定</button>
             </div>
         </div>`).join('');
 }
@@ -407,26 +425,14 @@ function showVisualResult(d) {
     document.getElementById('res-race-part').classList.remove('hidden');
     document.getElementById('res-final-part').classList.add('hidden');
     document.getElementById('res-winner').innerText = d.winner;
-    document.getElementById('res-payout-list').innerHTML = d.payouts.map(p => `
-        <div class="payout-item">
-            <span class="payout-name">${p.name}</span>
-            <span class="payout-amount">+${p.win}</span>
-        </div>`).join('');
+    document.getElementById('res-payout-list').innerHTML = d.payouts.map(p => `<div>${p.name}: <span style="color:var(--accent)">+${p.win}</span></div>`).join('');
 }
 function showRankingUI(rankData) {
     if(myRole === 'controller') return;
     const screen = document.getElementById('result-screen'); screen.style.display = 'flex';
     document.getElementById('res-race-part').classList.add('hidden');
     document.getElementById('res-final-part').classList.remove('hidden');
-    const medals = ['🥇', '🥈', '🥉'];
-    document.getElementById('final-rank-list').innerHTML = rankData.map((r,i) => `
-        <div class="rank-item">
-            <div class="rank-medal">${medals[i] || '🏅'}</div>
-            <div class="rank-info">
-                <div class="rank-name">${i+1}位: ${r.name}</div>
-                <div class="rank-chips">💰 ${r.chips}</div>
-            </div>
-        </div>`).join('');
+    document.getElementById('final-rank-list').innerHTML = rankData.map((r,i) => `<div>${i+1}位 ${r.name} (${r.chips})</div>`).join('');
 }
 function updateCtrlUI(state) {
     ['ctrl-pre-race', 'ctrl-post-race', 'ctrl-final-action', 'ctrl-next-action', 'initialPickBtn'].forEach(id => document.getElementById(id).classList.add('hidden'));
@@ -440,9 +446,9 @@ function updateCtrlUI(state) {
 // 登録・管理
 function updateRaceListUI() {
     const container = document.getElementById('race-list-display');
-    container.innerHTML = racePool.map(r => `<div class="race-card"><div><b>🏇 ${r.name}</b></div><div><button class="mini-btn" style="background:var(--blue);" onclick="editRace('${r.id}')">編集</button> <button class="mini-btn" style="background:var(--red);" onclick="deleteRace('${r.id}')">削除</button></div></div>`).join('');
+    container.innerHTML = racePool.map(r => `<div class="race-card"><div><b>${r.name}</b></div><div><button class="mini-btn" style="background:var(--blue);" onclick="editRace('${r.id}')">編集</button> <button class="mini-btn" style="background:var(--red);" onclick="deleteRace('${r.id}')">削除</button></div></div>`).join('');
 }
-function openEditor() { showSection('registration-area'); resetForm(); updateRaceListUI(); }
+function openDataManager() { showSection('data-manager'); switchDataTab('config'); }
 function addHorseField(data = null) {
     const div = document.createElement('div'); div.className = "horse-input-row";
     div.innerHTML = `<input type="text" placeholder="馬名" class="h-name" value="${data?data.name:''}"> <input type="number" step="0.1" class="h-odds" value="${data?data.initialOdds:'2.0'}"> <select class="h-rank" style="padding:8px;"><option value="">順位</option><option value="1" ${data?.rank===1?'selected':''}>1位</option><option value="2" ${data?.rank===2?'selected':''}>2位</option><option value="3" ${data?.rank===3?'selected':''}>3位</option></select> <button class="mini-btn" style="background:var(--red); padding:8px; margin:0;" onclick="this.parentElement.remove()">×</button>`;
@@ -468,13 +474,9 @@ function deleteRace(id) { if(!confirm("削除しますか？")) return; racePool
 
 // モニター通信用
 function renderMonitorUI() {
-    document.getElementById('mon-status').innerText = `🏁 RACE ${currentRaceNum} / ${seriesTotal}`;
+    document.getElementById('mon-status').innerText = `RACE ${currentRaceNum} / ${seriesTotal}`;
     document.getElementById('mon-race-name').innerText = currentRace.name;
-    document.getElementById('mon-odds-list').innerHTML = currentRace.horses.map(h => `
-        <div class="horse-stat">
-            <span style="font-weight:bold;">🏇 ${h.name}</span>
-            <span style="color:var(--gold); font-weight:bold;">x${h.currentOdds.toFixed(2)} <span style="color:var(--accent);">(${h.pool})</span></span>
-        </div>`).join('');
+    document.getElementById('mon-odds-list').innerHTML = currentRace.horses.map(h => `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #222;"><span>${h.name}</span> <span style="color:var(--gold)">x${h.currentOdds.toFixed(2)} (Pool: ${h.pool})</span></div>`).join('');
 }
 function updateOdds() {
     const total = currentRace.horses.reduce((s, h) => s + h.pool, 0);
