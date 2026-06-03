@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>UMA1 GP - v24 Seamless Reset</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode.js/1.5.3/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <style>
         :root { --turf: #0a2e1a; --gold: #ffd700; --panel: rgba(0,0,0,0.95); --accent: #00ff88; --red: #ff4757; --blue: #54a0ff; }
         body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--turf); color: #fff; margin: 0; padding: 10px; overflow-x: hidden; }
@@ -24,7 +24,7 @@
         .config-card { background: rgba(0,255,136,0.1); padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 3px solid var(--accent); display: flex; justify-content: space-between; align-items: center; }
         .config-card.active { background: rgba(0,255,136,0.25); border-left: 3px solid var(--gold); }
         #qr-container { text-align: center; margin: 20px 0; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 10px; }
-        #qr-code { background: white; padding: 15px; border-radius: 8px; display: inline-block; margin: 10px 0; }
+        #qr-code { background: white; padding: 15px; border-radius: 8px; display: inline-block; margin: 10px 0; min-width: 280px; }
         .qr-info { font-size: 14px; color: #aaa; margin-top: 10px; }
     </style>
 </head>
@@ -190,15 +190,28 @@ function generateQRCode(roomName) {
     const token = 'tok_' + Math.random().toString(36).slice(2, 11) + Date.now().toString(36);
     const qrUrl = `${baseUrl}?room=${encodeURIComponent(roomName)}&token=${token}&type=mobile-guest`;
     
+    console.log('Generating QR for:', qrUrl);
+    
     // QRコード生成
-    qrCodeInstance = new QRCode(qrDiv, {
-        text: qrUrl,
-        width: 250,
-        height: 250,
-        colorDark: "#000000",
-        colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.H
-    });
+    try {
+        QRCode.toCanvas(document.getElementById('qr-code'), qrUrl, {
+            errorCorrectionLevel: 'H',
+            type: 'image/png',
+            width: 250,
+            margin: 1,
+            color: { dark: '#000000', light: '#FFFFFF' }
+        }, function(error) {
+            if(error) {
+                console.error('QRコード生成エラー:', error);
+                document.getElementById('qr-code').innerText = 'QR生成失敗';
+            } else {
+                console.log('QRコード生成成功');
+            }
+        });
+    } catch(e) {
+        console.error('QRコード生成例外:', e);
+        document.getElementById('qr-code').innerText = '参加URL: ' + qrUrl;
+    }
     
     // トークンを保存（検証用）
     if(!window.validTokens) window.validTokens = {};
@@ -304,7 +317,7 @@ function initPeer(role) {
         if(role === 'monitor') {
             seriesTotal = parseInt(document.getElementById('seriesCount').value) || 1;
             showSection('monitor-screen');
-            generateQRCode(room);
+            setTimeout(() => generateQRCode(room), 100);
             peer.on('connection', c => { 
                 connections.push(c); 
                 connectionTypes.set(c.peer, c.metadata?.type || 'unknown');
