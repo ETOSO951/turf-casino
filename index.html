@@ -172,7 +172,7 @@
     </div>
 </div>
 
-<video id="mainVideo" playsinline webkit-playsinline preload="auto" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:9999; opacity:0; visibility:hidden; transition: opacity 0.3s;"></video>
+<video id="mainVideo" playsinline webkit-inline preload="auto" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:9999; opacity:0; visibility:hidden; transition: opacity 0.3s;"></video>
 
 <script>
 let racePool = [], thanksRacePool = [];
@@ -182,6 +182,7 @@ let isThanksgiving = false;
 let peer = null, connections = [], connToMonitor = null;
 let currentRace = null, myChips = 1000, currentRaceNum = 0, seriesTotal = 0;
 let tempBets = {}, confirmedBets = {}, guestBalances = {}, myRole = '';
+let isRaceActive = false; // 親機側で現在レース（投票・再生期間）が稼働中かを管理
 
 const DB_NAME = 'TurfAppDB';
 const DB_VERSION = 1;
@@ -190,7 +191,6 @@ const STORE_NAME = 'races';
 const PRESET_KEY = 'turf_presets';
 const DEFAULT_PRESET_KEY = 'turf_default_preset';
 
-// --- IndexedDB の初期化とデータ操作用共通関数 ---
 function openDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -251,7 +251,6 @@ window.onload = () => {
     loadDefaultPreset();
 };
 
-// --- 通信データ一斉配信用のブロードキャスト関数 ---
 function broadcast(data) {
     if (myRole === 'monitor') {
         connections.forEach(conn => {
@@ -262,24 +261,20 @@ function broadcast(data) {
     }
 }
 
-// --- セクション切り替え用関数 ---
 function showSection(sectionId) {
     document.querySelectorAll('.container .section').forEach(el => el.classList.add('hidden'));
     const target = document.getElementById(sectionId);
     if (target) target.classList.remove('hidden');
 }
 
-// --- 操作パネルからの要求送信関数群 ---
 function requestPickRace() { if (connToMonitor) connToMonitor.send({ type: 'REQ_PICK' }); }
 function requestCountdown() { if (connToMonitor) connToMonitor.send({ type: 'REQ_COUNTDOWN' }); }
 function requestCloseResult() { if (connToMonitor) connToMonitor.send({ type: 'REQ_CLOSE_RES' }); }
 function requestSystemReset() { if (confirm("本当に最初からやり直しますか？") && connToMonitor) connToMonitor.send({ type: 'REQ_RESET' }); }
 
-// --- 感謝祭モードのON/OFF切り替えロジック ---
 function toggleThanksgivingMode() {
     isThanksgiving = !isThanksgiving;
     applyThanksgivingVisual(isThanksgiving);
-    
     if (connToMonitor && connToMonitor.open) {
         connToMonitor.send({ type: 'TG_MODE_SYNC', enabled: isThanksgiving });
     }
@@ -302,7 +297,6 @@ function applyThanksgivingVisual(enable) {
     }
 }
 
-// --- 設定プリセット制御 ---
 function getPresets() {
     const data = localStorage.getItem(PRESET_KEY);
     return data ? JSON.parse(data) : [];
@@ -368,7 +362,6 @@ function loadDefaultPreset() {
     if(defaultPresetId) applyPreset(defaultPresetId);
 }
 
-// --- 管理画面タブ切り替え ---
 function switchDataTab(tab) {
     document.getElementById('config-tab').classList.add('hidden');
     document.getElementById('race-tab').classList.add('hidden');
@@ -384,7 +377,6 @@ function switchDataTab(tab) {
     }
 }
 
-// --- オッズ計算の定義 ---
 function updateOdds() {
     if (!currentRace || !currentRace.horses) return;
     let totalPool = 0;
@@ -400,7 +392,6 @@ function updateOdds() {
     });
 }
 
-// --- モニターUI描写の定義 ---
 function renderMonitorUI() {
     if (!currentRace) return;
     document.getElementById('mon-race-name').innerText = currentRace.name || "READY";
@@ -417,7 +408,6 @@ function renderMonitorUI() {
     }
 }
 
-// --- 通信コア ---
 function initPeer(role) {
     const room = document.getElementById('roomName').value;
     if(!room) return alert("合言葉を入力してください");
@@ -462,31 +452,47 @@ function handleData(d, senderConn = null) {
         }
         if(d.type === 'JOIN') {
             if (senderConn) {
-                guestBalances[senderConn.peer] = { name: d.name, chips: 1000, isTemp: d.isTemp || false };
+                // すでに登録があるユーザーか判定、なければ初期化
+                if(!guestBalances[senderConn.peer]){
+                    guestBalances[senderConn.peer] = { name: d.name, chips: 1000, isTemp: d.isTemp || false };
+                } else {
+                    // 同一接続で名前が再入力された場合は名前のみ更新（チップを引き継ぐ）
+                    guestBalances[senderConn.peer].name = d.name;
+                }
+                
                 senderConn.send({ type: 'TG_MODE_SYNC', enabled: isThanksgiving });
-                if(currentRace) {
-                    senderConn.send({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving });
+                
+                // 【対策】親機側でレースがアクティブ（抽選後〜リザルト前）のときだけ、有効なレース情報を同期する
+                if(currentRace && isRaceActive) {
+                    senderConn.send({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving, isActive: true });
                     senderConn.send({ type: 'UPDATE_STATE', horses: currentRace.horses, balances: guestBalances });
+                } else {
+                    // まだ抽選されていない、または終了済みの場合は空のロック状態を明示的に送りつける
+                    senderConn.send({ type: 'RACE_SET', race: null, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving, isActive: false });
                 }
             }
             return;
         }
         if(d.type === 'REQ_PICK') {
+            isRaceActive = true; // レース開始（投票可能）
             currentRaceNum++;
             const activePool = isThanksgiving ? thanksRacePool : racePool;
             if(activePool.length === 0) {
                 alert("選択されたモードのレースデータが空です。登録してください。");
                 currentRaceNum--;
+                isRaceActive = false;
                 return;
             }
             const pick = activePool[Math.floor(Math.random()*activePool.length)];
             currentRace = JSON.parse(JSON.stringify(pick));
             currentRace.horses.forEach(h => { h.pool=0; h.bets={}; h.currentOdds=h.initialOdds; });
-            broadcast({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving });
+            broadcast({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving, isActive: true });
             renderMonitorUI();
             return;
         }
         if(d.type === 'BET') {
+            // 【対策】親機側でレース受付中でなければベットデータを完全に無視
+            if (!isRaceActive) return; 
             if (senderConn && currentRace) {
                 const h = currentRace.horses[d.idx];
                 h.pool = (h.pool || 0) + d.amount;
@@ -499,6 +505,7 @@ function handleData(d, senderConn = null) {
             return;
         }
         if(d.type === 'REQ_COUNTDOWN') {
+            isRaceActive = false; // カウントダウンが始まったら新規投票は受付終了
             const t = Date.now() + 10500;
             broadcast({ type: 'COUNT_SYNC', t });
             startMonitorCountdown(t);
@@ -519,6 +526,7 @@ function handleData(d, senderConn = null) {
             currentRaceNum = 0;
             guestBalances = {};
             currentRace = null;
+            isRaceActive = false;
             broadcast({ type: 'RESET_STATE' });
             document.getElementById('result-screen').style.display = 'none';
             document.getElementById('mon-race-name').innerText = "READY";
@@ -545,7 +553,15 @@ function handleData(d, senderConn = null) {
         if(tgArea) tgArea.classList.add('hidden');
 
         if(myRole === 'controller') { updateCtrlUI('pre-race'); document.getElementById('ctrl-race-title').innerText = `RACE ${currentRaceNum}/${seriesTotal}`; }
-        if(myRole === 'guest') renderGuestBetting();
+        
+        // 【対策】アクティブフラグが立っていない場合は、ゲスト画面の操作盤を強制排除する
+        if(myRole === 'guest') {
+            if(d.isActive && currentRace) {
+                renderGuestBetting();
+            } else {
+                document.getElementById('betting-area').innerHTML = '（レース抽選待ちです...）';
+            }
+        }
     }
     if(d.type === 'UPDATE_STATE') {
         if(currentRace) currentRace.horses = d.horses;
@@ -565,6 +581,9 @@ function handleData(d, senderConn = null) {
     }
     if(d.type === 'CLOSE_UI') {
         document.getElementById('result-screen').style.display = 'none';
+        if(myRole === 'guest') {
+            document.getElementById('betting-area').innerHTML = '（次のレースを抽選中です...）';
+        }
         if(myRole === 'controller') {
             updateCtrlUI('next-action');
             const tgArea = document.getElementById('ctrl-tg-toggle-area');
@@ -583,12 +602,12 @@ function handleData(d, senderConn = null) {
         if(myRole === 'guest') {
             myChips = 1000;
             document.getElementById('playerName').value = "";
+            document.getElementById('betting-area').innerHTML = '（レース抽選待ちです...）';
             showSection('guest-join-screen');
         }
     }
 }
 
-// --- モニターカウントダウン演出 ---
 function startMonitorCountdown(targetTime) {
     const o = document.getElementById('countdown-overlay'); o.style.display = 'block';
     const timer = setInterval(() => {
@@ -598,44 +617,47 @@ function startMonitorCountdown(targetTime) {
     }, 100);
 }
 
-// --- 動画再生コア関数（自動再生ブロック対応版） ---
+// 【強化】ブラウザ制限を強力に弾く最新再生コア
 async function playVideo() {
     const v = document.getElementById('mainVideo'); 
     const videoData = currentRace ? currentRace.videoSrc : null;
     if(!videoData) return finalizeRace();
 
-    // 以前の古いオブジェクトURLが残っている場合はクリーンアップ
     if(v.src && v.src.startsWith('blob:')) {
         URL.revokeObjectURL(v.src);
     }
 
-    // 動画ソースをBlobオブジェクトまたはURLから設定
     if(videoData instanceof Blob) {
         v.src = URL.createObjectURL(videoData);
     } else {
         v.src = videoData; 
     }
     
-    // 表示状態に切り替え
     v.style.visibility = 'visible';
     v.style.opacity = '1';
     
-    // 動画のメタデータが読み込まれるのを待つ安全バッファ処理
-    const readyToPlay = new Promise((resolve) => {
-        v.onloadedmetadata = () => resolve();
-        setTimeout(resolve, 3000); // 最大3秒でタイムアウトして強制続行
+    // メタデータ、および再生可能状態(HAVE_FUTURE_DATA以上)になるのをしっかり待つバッファ
+    await new Promise((resolve) => {
+        if(v.readyState >= 3) {
+            resolve();
+        } else {
+            v.oncanplay = () => resolve();
+            v.onloadedmetadata = () => resolve();
+            setTimeout(resolve, 3000); // 最大3秒でセーフティ解除
+        }
     });
-    await readyToPlay;
 
     try { 
+        // 1回目の通常再生トライ
         await v.play(); 
     } catch(e) { 
-        console.warn("通常の再生がブロックされました。ミュートで再試行します:", e);
+        console.warn("自動再生制限を検知しました。ミュート（消音）に切り替えて強制突破します:", e);
         v.muted = true; 
         try {
+            // ミュートにすればほぼ100%のブラウザで再生が許可されます
             await v.play();
         } catch(retryError) {
-            console.error("再生に完全に失敗しました。リザルトへスキップします:", retryError);
+            console.error("ブラウザによって動画の再生が完全に拒否されました。リザルトへ進みます:", retryError);
             v.style.opacity = '0';
             v.style.visibility = 'hidden';
             finalizeRace();
@@ -647,7 +669,7 @@ async function playVideo() {
         v.style.opacity = '0';
         v.style.visibility = 'hidden';
         if(v.src && v.src.startsWith('blob:')) {
-            URL.revokeObjectURL(v.src); // メモリ解放
+            URL.revokeObjectURL(v.src);
             v.src = "";
         }
         finalizeRace(); 
@@ -670,14 +692,13 @@ function finalizeRace() {
     showVisualResult({ winner: winnerName, payouts });
 }
 
-// --- 運営ゲスト（タブレット側操作） ---
 function guestJoin() { 
     const n = document.getElementById('playerName').value.trim(); 
     if(n && connToMonitor) { 
         connToMonitor.send({type:'JOIN', name:n, isTemp: false}); 
         showSection('guest-screen'); 
         document.getElementById('display-name').innerText = n; 
-        document.getElementById('my-chips').innerText = "1000";
+        document.getElementById('my-chips').innerText = myChips;
     } 
 }
 function changeBet(i, a) { if(myChips >= a) { myChips -= a; tempBets[i] = (tempBets[i]||0) + a; updateGuestChipsUI(); updateBetRow(i); } }
@@ -707,7 +728,6 @@ function renderGuestBetting() {
         </div>`).join('');
 }
 
-// --- リザルト・ランキング表示 ---
 function showVisualResult(d) {
     if(myRole === 'controller') return;
     const screen = document.getElementById('result-screen'); screen.style.display = 'flex';
@@ -724,7 +744,6 @@ function showRankingUI(rank) {
     document.getElementById('final-rank-list').innerHTML = rank.map((p, i) => `<div>${i+1}位 ${p.name} (${p.chips})</div>`).join('');
 }
 
-// --- 操作パネル用UI表示切替ロジック ---
 function updateCtrlUI(state) {
     ['ctrl-pre-race', 'ctrl-post-race', 'ctrl-final-action', 'ctrl-next-action', 'initialPickBtn'].forEach(id => {
         const el = document.getElementById(id);
@@ -737,7 +756,6 @@ function updateCtrlUI(state) {
     else if(state === 'initial') document.getElementById('initialPickBtn').classList.remove('hidden');
 }
 
-// --- レースデータ管理 ---
 function updateRaceListUI() {
     const container = document.getElementById('race-list-display');
     if(!container) return;
