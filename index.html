@@ -190,6 +190,39 @@ const STORAGE_KEY_THANKS = 'turf_v25_thanks';
 const PRESET_KEY = 'turf_presets';
 const DEFAULT_PRESET_KEY = 'turf_default_preset';
 
+// --- 【新規追加】IndexedDBの初期化と動画復元ロジック ---
+let db = null;
+const dbRequest = indexedDB.open("TurfVideoDB", 1);
+
+dbRequest.onupgradeneeded = (e) => {
+    e.target.result.createObjectStore("videos");
+};
+
+dbRequest.onsuccess = (e) => {
+    db = e.target.result;
+    restoreVideosFromDB(); // DB起動時に動画BlobURLを自動復元
+};
+
+function restoreVideosFromDB() {
+    if (!db) return;
+    const transaction = db.transaction(["videos"], "readonly");
+    const store = transaction.objectStore("videos");
+    const request = store.openCursor();
+    request.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+            const blob = cursor.value;
+            // 保存されていたBlobファイルからBlob URLを再生成してMapに登録
+            videoMap.set(cursor.key, URL.createObjectURL(blob));
+            cursor.continue();
+        } else {
+            // すべての復元が完了したら一覧の表示を更新
+            updateRaceListUI();
+        }
+    };
+}
+// --------------------------------------------------
+
 window.onload = () => {
     const savedNormal = localStorage.getItem(STORAGE_KEY_NORMAL);
     if(savedNormal) racePool = JSON.parse(savedNormal);
@@ -402,16 +435,14 @@ function handleData(d, senderConn = null) {
         }
         if(d.type === 'JOIN') {
             if (senderConn) {
-                // 【バグ対策】既存プレイヤーならチップを引き継ぎ、新規なら1000で初期化
                 if(!guestBalances[senderConn.peer]){
                     guestBalances[senderConn.peer] = { name: d.name, chips: 1000 };
                 } else {
-                    guestBalances[senderConn.peer].name = d.name; // 名前の再入力同期
+                    guestBalances[senderConn.peer].name = d.name; 
                 }
                 
                 senderConn.send({ type: 'TG_MODE_SYNC', enabled: isThanksgiving });
                 
-                // 【バグ対策】現在レース受付中(isRaceActive)の時だけベット可能画面を表示させる
                 if(currentRace && isRaceActive) {
                     senderConn.send({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving, isActive: true });
                     senderConn.send({ type: 'UPDATE_STATE', horses: currentRace.horses, balances: guestBalances });
@@ -439,7 +470,7 @@ function handleData(d, senderConn = null) {
             return;
         }
         if(d.type === 'BET') {
-            if (!isRaceActive) return; // 【バグ対策】受付中以外の一切の投票を拒否
+            if (!isRaceActive) return; 
             if (senderConn && currentRace) {
                 const h = currentRace.horses[d.idx];
                 h.pool = (h.pool || 0) + d.amount;
@@ -452,7 +483,7 @@ function handleData(d, senderConn = null) {
             return;
         }
         if(d.type === 'REQ_COUNTDOWN') {
-            isRaceActive = false; // カウントダウン開始で新規投票締め切り
+            isRaceActive = false; 
             const t = Date.now() + 10500;
             broadcast({ type: 'COUNT_SYNC', t });
             startMonitorCountdown(t);
@@ -563,10 +594,9 @@ function startMonitorCountdown(targetTime) {
     }, 100);
 }
 
-// 【完全復活】古いバージョンで確実に動画が流れていたコアロジック
 async function playVideo() {
     const v = document.getElementById('mainVideo'); 
-    const url = videoMap.get(currentRace.id); // メモリ上のMapからBlob URLを引き出す
+    const url = videoMap.get(currentRace.id); 
     
     if(!url) return finalizeRace();
     
@@ -719,8 +749,15 @@ function applyToPool() {
 
     const fileInput = document.getElementById('videoFile');
     if(fileInput.files.length > 0) {
-        // 古いバージョンの動画記憶ロジックを完全再現
-        videoMap.set(id, URL.createObjectURL(fileInput.files[0]));
+        const file = fileInput.files[0];
+        // 古いバージョンの動画記憶ロジック
+        videoMap.set(id, URL.createObjectURL(file));
+
+        // 【修正】IndexedDBに動画のバイナリ（Blob）を永続保存
+        if (db) {
+            const transaction = db.transaction(["videos"], "readwrite");
+            transaction.objectStore("videos").put(file, id);
+        }
     }
 
     const raceData = { id, name, horses };
@@ -729,7 +766,6 @@ function applyToPool() {
     
     if(idx > -1) pool[idx] = raceData; else pool.push(raceData);
 
-    // ローカルストレージにテキスト情報のみ同期保存
     if(currentDataTab === 'race-thanks') {
         localStorage.setItem(STORAGE_KEY_THANKS, JSON.stringify(thanksRacePool));
     } else {
@@ -767,6 +803,13 @@ function deleteRace(id) {
         racePool = racePool.filter(r => r.id !== id);
         localStorage.setItem(STORAGE_KEY_NORMAL, JSON.stringify(racePool));
     }
+
+    // 【修正】IndexedDBからも動画データを削除
+    if (db) {
+        const transaction = db.transaction(["videos"], "readwrite");
+        transaction.objectStore("videos").delete(id);
+    }
+
     videoMap.delete(id);
     updateRaceListUI();
 }
