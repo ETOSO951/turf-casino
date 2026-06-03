@@ -109,7 +109,7 @@
                 <input type="hidden" id="editingId">
                 <input type="text" id="raceName" placeholder="レース名">
                 <div style="margin-bottom:10px;">
-                    <label style="font-size:12px; color:#ccc; display:block;">動画ファイル (※Base64でデータ保存されます)</label>
+                    <label style="font-size:12px; color:#ccc; display:block;">動画ファイル (※IndexedDBへ保存されます)</label>
                     <input type="file" id="videoFile" accept="video/*">
                     <div id="video-status" style="font-size:11px; color:var(--accent); margin-top:2px;"></div>
                 </div>
@@ -172,7 +172,7 @@
     </div>
 </div>
 
-<video id="mainVideo" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#000; display:none; z-index:9999;" playsinline></video>
+<video id="mainVideo" playsinline webkit-playsinline preload="auto" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:9999; opacity:0; visibility:hidden; transition: opacity 0.3s;"></video>
 
 <script>
 let racePool = [], thanksRacePool = [];
@@ -214,7 +214,6 @@ async function loadPoolsFromDB() {
         
         request.onsuccess = () => {
             const allData = request.result || [];
-            // 通常レースと感謝祭レースを識別してプールに振り分け
             racePool = allData.filter(r => r.dataType !== 'race-thanks');
             thanksRacePool = allData.filter(r => r.dataType === 'race-thanks');
             updateRaceListUI();
@@ -246,14 +245,13 @@ async function deleteRaceFromDB(id) {
     });
 }
 
-// 起動時にDBからデータを読み込む
 window.onload = () => {
     loadPoolsFromDB();
     updatePresetList();
     loadDefaultPreset();
 };
 
-// --- 通信データ一斉配信用のブロードキャスト関数（親機から全子機へ再配信） ---
+// --- 通信データ一斉配信用のブロードキャスト関数 ---
 function broadcast(data) {
     if (myRole === 'monitor') {
         connections.forEach(conn => {
@@ -304,7 +302,7 @@ function applyThanksgivingVisual(enable) {
     }
 }
 
-// --- 設定プリセット制御（こちらは軽量データのためlocalStorageのまま維持） ---
+// --- 設定プリセット制御 ---
 function getPresets() {
     const data = localStorage.getItem(PRESET_KEY);
     return data ? JSON.parse(data) : [];
@@ -600,24 +598,57 @@ function startMonitorCountdown(targetTime) {
     }, 100);
 }
 
+// --- 動画再生コア関数（自動再生ブロック対応版） ---
 async function playVideo() {
     const v = document.getElementById('mainVideo'); 
     const videoData = currentRace ? currentRace.videoSrc : null;
     if(!videoData) return finalizeRace();
 
-    // IndexedDBから読み込まれた動画がBlob(File型)の場合は、再生用の一次URLを作る
+    // 以前の古いオブジェクトURLが残っている場合はクリーンアップ
+    if(v.src && v.src.startsWith('blob:')) {
+        URL.revokeObjectURL(v.src);
+    }
+
+    // 動画ソースをBlobオブジェクトまたはURLから設定
     if(videoData instanceof Blob) {
         v.src = URL.createObjectURL(videoData);
     } else {
         v.src = videoData; 
     }
     
-    v.style.display = 'block';
-    try { await v.play(); } catch(e) { v.muted = true; await v.play(); }
+    // 表示状態に切り替え
+    v.style.visibility = 'visible';
+    v.style.opacity = '1';
+    
+    // 動画のメタデータが読み込まれるのを待つ安全バッファ処理
+    const readyToPlay = new Promise((resolve) => {
+        v.onloadedmetadata = () => resolve();
+        setTimeout(resolve, 3000); // 最大3秒でタイムアウトして強制続行
+    });
+    await readyToPlay;
+
+    try { 
+        await v.play(); 
+    } catch(e) { 
+        console.warn("通常の再生がブロックされました。ミュートで再試行します:", e);
+        v.muted = true; 
+        try {
+            await v.play();
+        } catch(retryError) {
+            console.error("再生に完全に失敗しました。リザルトへスキップします:", retryError);
+            v.style.opacity = '0';
+            v.style.visibility = 'hidden';
+            finalizeRace();
+            return;
+        }
+    }
+
     v.onended = () => { 
-        v.style.display = 'none'; 
-        if(v.src.startsWith('blob:')) {
+        v.style.opacity = '0';
+        v.style.visibility = 'hidden';
+        if(v.src && v.src.startsWith('blob:')) {
             URL.revokeObjectURL(v.src); // メモリ解放
+            v.src = "";
         }
         finalizeRace(); 
     };
@@ -743,7 +774,6 @@ function resetForm() {
     document.getElementById('apply-btn').innerText = "保存して一覧を更新";
 }
 
-// 【大幅変更】大容量ファイル対応のため、DBへの非同期保存処理に変更
 async function applyToPool() {
     const name = document.getElementById('raceName').value.trim(); 
     if(!name) return alert("レース名を入力してください");
@@ -763,7 +793,6 @@ async function applyToPool() {
     let videoData = null;
 
     if(fileInput.files.length > 0) {
-        // Base64に変換せず、動画の生の塊(Blob/File)のまま保存することでフリーズを完全に回避
         videoData = fileInput.files[0];
     } else {
         const pool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
@@ -776,12 +805,12 @@ async function applyToPool() {
         name, 
         horses, 
         videoSrc: videoData,
-        dataType: currentDataTab // データの識別タグ
+        dataType: currentDataTab 
     };
 
     try {
         await saveRaceToDB(raceData);
-        await loadPoolsFromDB(); // DBから再ロードして変数とUIを更新
+        await loadPoolsFromDB(); 
         resetForm();
         alert("レースを保存しました");
     } catch (e) {
@@ -808,12 +837,11 @@ function editRace(id) {
     document.getElementById('apply-btn').innerText = "変更を上書き保存";
 }
 
-// 【変更】削除処理も IndexedDB 用に非同期化
 async function deleteRace(id) {
     if(!confirm("本当に削除しますか？")) return;
     try {
         await deleteRaceFromDB(id);
-        await loadPoolsFromDB(); // 再読み込み
+        await loadPoolsFromDB(); 
     } catch(e) {
         alert("削除に失敗しました");
     }
