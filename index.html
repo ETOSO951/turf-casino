@@ -3,15 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>UMA1 GP - v24 Seamless Reset (Standard)</title>
+    <title>UMA1 GP - Main System (Thanksgiving Edition)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --turf: #0a2e1a; --gold: #ffd700; --panel: rgba(0,0,0,0.95); --accent: #00ff88; --red: #ff4757; --blue: #54a0ff; }
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--turf); color: #fff; margin: 0; padding: 10px; overflow-x: hidden; }
+        :root { 
+            --turf: #0a2e1a; 
+            --gold: #ffd700; 
+            --panel: rgba(0,0,0,0.95); 
+            --accent: #00ff88; 
+            --red: #ff4757; 
+            --blue: #54a0ff; 
+        }
+        /* 感謝祭（サンクスギビング）モード用のテーマカラー定義 */
+        body.thanksgiving {
+            --turf: #4a0e17; 
+            --gold: #fff200; 
+            --panel: rgba(25, 0, 5, 0.96); 
+            --accent: #ff9f43; 
+            --blue: #ff6b6b;
+        }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--turf); color: #fff; margin: 0; padding: 10px; overflow-x: hidden; transition: background 0.5s ease; }
         .container { max-width: 600px; margin: auto; }
-        .board { background: var(--panel); border: 2px solid var(--gold); border-radius: 15px; padding: 20px; margin-bottom: 20px; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+        .board { background: var(--panel); border: 2px solid var(--gold); border-radius: 15px; padding: 20px; margin-bottom: 20px; box-shadow: 0 0 15px rgba(0,0,0,0.5); position: relative; }
+        
+        /* 感謝祭バッジ */
+        .tg-badge { display: none; position: absolute; top: 0; right: 15px; background: #ff4757; color: #fff; padding: 4px 10px; font-size: 11px; font-weight: bold; border-radius: 0 0 8px 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); animation: pulse 1.5s infinite; }
+        body.thanksgiving .tg-badge { display: block; }
+
         .btn { background: linear-gradient(180deg, var(--gold) 0%, #b8860b 100%); border: none; padding: 15px; color: #000; font-weight: bold; border-radius: 8px; width: 100%; margin: 10px 0; cursor: pointer; font-size: 16px; box-shadow: 0 4px #664d00; transition: 0.1s; }
         .btn:active { transform: translateY(2px); box-shadow: 0 2px #664d00; }
+        body.thanksgiving .btn { background: linear-gradient(180deg, #ff9f43 0%, #ff4757 100%); color: #fff; box-shadow: 0 4px #8a1d29; }
+        body.thanksgiving .btn:active { box-shadow: 0 2px #8a1d29; }
+
         .mini-btn { padding: 10px; font-size: 12px; border-radius: 5px; border: none; cursor: pointer; color: #fff; font-weight: bold; margin: 2px; }
         .hidden { display: none !important; }
         input, select { width: 100%; padding: 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #444; margin: 5px 0; background: #111; color: #fff; }
@@ -21,6 +44,12 @@
         .horse-input-row { display: grid; grid-template-columns: 2fr 1fr 1fr 40px; gap: 5px; margin-bottom: 10px; }
         .config-card { background: rgba(0,255,136,0.1); padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 3px solid var(--accent); display: flex; justify-content: space-between; align-items: center; }
         .config-card.active { background: rgba(0,255,136,0.25); border-left: 3px solid var(--gold); }
+        
+        @keyframes pulse {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; transform: scale(1.05); }
+            100% { opacity: 0.8; }
+        }
     </style>
 </head>
 <body>
@@ -57,9 +86,10 @@
     <div id="data-manager" class="section hidden board">
         <h2 style="text-align:center; color:var(--gold); margin-top:0;">⚙️ データ管理</h2>
         
-        <div style="display:flex; gap:10px; margin-bottom:20px;">
-            <button class="mini-btn" style="background:var(--blue); flex:1;" onclick="switchDataTab('config')">設定プリセット</button>
-            <button class="mini-btn" style="background:#666; flex:1;" onclick="switchDataTab('race')">レース管理</button>
+        <div style="display:flex; gap:5px; margin-bottom:20px;">
+            <button class="mini-btn" style="background:#444; flex:1;" onclick="switchDataTab('config')">プリセット</button>
+            <button class="mini-btn" style="background:var(--blue); flex:1;" onclick="switchDataTab('race-normal')">通常レース</button>
+            <button class="mini-btn" style="background:#ff9f43; color:#000; flex:1;" onclick="switchDataTab('race-thanks')">🍁 感謝祭レース</button>
         </div>
 
         <div id="config-tab">
@@ -69,7 +99,6 @@
                 <input type="number" id="mgr-seriesCount" value="1" placeholder="総レース数" min="1" max="10">
                 <button class="btn" onclick="saveNewPreset()" style="background:var(--accent); color:#000; font-size:14px; padding:12px;">💾 新規保存</button>
             </div>
-
             <div>
                 <label style="font-size:12px; color:#aaa; display:block; margin-bottom:10px;">📁 保存済みプリセット</label>
                 <div id="preset-list"></div>
@@ -94,8 +123,14 @@
     </div>
 
     <div id="controller-screen" class="section hidden board">
+        <div class="tg-badge">🍁 感謝祭モード適用中 🍁</div>
         <h3 id="ctrl-race-title" style="text-align:center; color:var(--gold);">READY</h3>
         
+        <div id="ctrl-tg-toggle-area" style="margin:15px 0; border: 1px dashed var(--gold); padding: 10px; border-radius: 8px; text-align: center;">
+            <span style="font-size:12px; color:#aaa; display:block; margin-bottom:5px;">スペシャルイベント切り替え</span>
+            <button id="tg-toggle-btn" class="btn" style="background:#ff9f43; color:#fff; margin:0; padding:10px;" onclick="toggleThanksgivingMode()">🍁 感謝祭モード: OFF</button>
+        </div>
+
         <div id="ctrl-pre-race" class="hidden">
             <button class="btn" onclick="requestCountdown()" style="background:var(--red); color:#fff;">🔥 カウントダウン開始</button>
         </div>
@@ -112,50 +147,86 @@
     </div>
 
     <div id="monitor-screen" class="section hidden board" style="text-align:center;">
+        <div class="tg-badge">🍁 感謝祭特別レース 🍁</div>
         <p id="mon-status" style="color:var(--accent); margin:0;"></p>
         <h1 id="mon-race-name" style="color:var(--gold); font-size:2.5em; margin:10px 0;">READY</h1>
         <div id="mon-odds-list" style="text-align:left; border-top:1px solid #333; padding-top:10px;"></div>
     </div>
 
     <div id="guest-join-screen" class="section hidden board">
+        <div class="tg-badge">🍁 感謝祭受付中 🍁</div>
         <h3 style="text-align:center;">運営用タブレット 参加登録</h3>
         <input type="text" id="playerName" placeholder="名前を入力">
         <button class="btn" onclick="guestJoin()">参加</button>
     </div>
 
     <div id="guest-screen" class="section hidden board">
+        <div class="tg-badge">🍁 感謝祭特別レース 🍁</div>
         <div style="display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #333; padding-bottom:10px;">
             <b id="display-name" style="color:var(--gold);">---</b>
             <span>CHIPS: <b id="my-chips" style="color:var(--accent);">1000</b></span>
         </div>
-        <div id="betting-area"></div>
+        <div id="betting-area">（レース抽選待ちです...）</div>
     </div>
 </div>
 
 <video id="mainVideo" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#000; display:none; z-index:9999;" playsinline></video>
 
 <script>
-let racePool = [], videoMap = new Map();
+let racePool = [], thanksRacePool = [], videoMap = new Map();
+let currentDataTab = 'race-normal'; // 'race-normal' または 'race-thanks'
+let isThanksgiving = false; // 感謝祭フラグ
+
 let peer = null, connections = [], connToMonitor = null;
 let currentRace = null, myChips = 1000, currentRaceNum = 0, seriesTotal = 0;
 let tempBets = {}, confirmedBets = {}, guestBalances = {}, myRole = '';
+
 const STORAGE_KEY = 'turf_v24_final';
+const THANKS_STORAGE_KEY = 'turf_v24_thanks';
 const PRESET_KEY = 'turf_presets';
 const DEFAULT_PRESET_KEY = 'turf_default_preset';
 
 window.onload = () => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if(saved) racePool = JSON.parse(saved);
-    updateRaceListUI();
+    const savedNormal = localStorage.getItem(STORAGE_KEY);
+    if(savedNormal) racePool = JSON.parse(savedNormal);
+    const savedThanks = localStorage.getItem(THANKS_STORAGE_KEY);
+    if(savedThanks) thanksRacePool = JSON.parse(savedThanks);
+    
     updatePresetList();
     loadDefaultPreset();
 };
 
+// --- 感謝祭モードのON/OFF切り替えロジック ---
+function toggleThanksgivingMode() {
+    isThanksgiving = !isThanksgiving;
+    applyThanksgivingVisual(isThanksgiving);
+    
+    // 全ての子機（スマホゲスト等）に現在の感謝祭モード状態を同期
+    broadcast({ type: 'TG_MODE_SYNC', enabled: isThanksgiving });
+}
+
+function applyThanksgivingVisual(enable) {
+    const btn = document.getElementById('tg-toggle-btn');
+    if(enable) {
+        document.body.classList.add('thanksgiving');
+        if(btn) {
+            btn.innerText = "🍁 感謝祭モード: ON 🔥";
+            btn.style.background = "linear-gradient(180deg, #ff4757 0%, #ff9f43 100%)";
+        }
+    } else {
+        document.body.classList.remove('thanksgiving');
+        if(btn) {
+            btn.innerText = "🍁 感謝祭モード: OFF";
+            btn.style.background = "#ff9f43";
+        }
+    }
+}
+
+// --- 設定プリセット制御 ---
 function getPresets() {
     const data = localStorage.getItem(PRESET_KEY);
     return data ? JSON.parse(data) : [];
 }
-
 function saveNewPreset() {
     const name = prompt('このプリセットに名前をつけてください:');
     if(!name) return;
@@ -164,15 +235,13 @@ function saveNewPreset() {
         id: 'preset_' + Date.now(),
         name: name,
         roomName: document.getElementById('mgr-roomName').value,
-        seriesCount: document.getElementById('mgr-seriesCount').value,
-        isDefault: false
+        seriesCount: document.getElementById('mgr-seriesCount').value
     };
     presets.push(preset);
     localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
     updatePresetList();
     alert(`「${name}」として保存しました`);
 }
-
 function updatePresetList() {
     const presets = getPresets();
     const defaultPresetId = localStorage.getItem(DEFAULT_PRESET_KEY);
@@ -181,7 +250,7 @@ function updatePresetList() {
         <div class="config-card ${p.id === defaultPresetId ? 'active' : ''}">
             <div>
                 <div style="font-weight:bold;">${p.name}</div>
-                <div style="font-size:12px; color:#aaa;">🔑 ${p.roomName} / ${p.seriesCount}レース ${p.id === defaultPresetId ? '⭐ デフォルト' : ''}</div>
+                <div style="font-size:12px; color:#aaa;">🔑 ${p.roomName} / ${p.seriesCount}レース ${p.id === defaultPresetId ? '⭐ デフォ' : ''}</div>
             </div>
             <div style="display:flex; gap:3px;">
                 <button class="mini-btn" style="background:var(--blue); padding:6px 10px;" onclick="applyPreset('${p.id}')">読込</button>
@@ -190,7 +259,6 @@ function updatePresetList() {
             </div>
         </div>`).join('');
 }
-
 function applyPreset(presetId) {
     const presets = getPresets();
     const preset = presets.find(p => p.id === presetId);
@@ -201,46 +269,47 @@ function applyPreset(presetId) {
         document.getElementById('seriesCount').value = preset.seriesCount;
     }
 }
-
 function setDefaultPreset(presetId) {
     localStorage.setItem(DEFAULT_PRESET_KEY, presetId);
     updatePresetList();
-    alert('デフォルトプリセットに設定しました');
+    alert('デフォルトに設定しました');
 }
-
 function deletePreset(presetId) {
-    if(!confirm('このプリセットを削除しますか？')) return;
+    if(!confirm('削除しますか？')) return;
     let presets = getPresets();
     presets = presets.filter(p => p.id !== presetId);
     localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
-    const defaultId = localStorage.getItem(DEFAULT_PRESET_KEY);
-    if(defaultId === presetId) localStorage.removeItem(DEFAULT_PRESET_KEY);
+    if(localStorage.getItem(DEFAULT_PRESET_KEY) === presetId) localStorage.removeItem(DEFAULT_PRESET_KEY);
     updatePresetList();
-    alert('削除しました');
 }
-
 function loadDefaultPreset() {
     const defaultPresetId = localStorage.getItem(DEFAULT_PRESET_KEY);
-    if(defaultPresetId) {
-        applyPreset(defaultPresetId);
-    }
+    if(defaultPresetId) applyPreset(defaultPresetId);
 }
 
+// --- 管理画面タブ切り替え ---
 function switchDataTab(tab) {
     document.getElementById('config-tab').classList.add('hidden');
     document.getElementById('race-tab').classList.add('hidden');
+    
     if(tab === 'config') {
         document.getElementById('config-tab').classList.remove('hidden');
     } else {
+        currentDataTab = tab; // 'race-normal' or 'race-thanks'
         document.getElementById('race-tab').classList.remove('hidden');
+        document.getElementById('form-title').innerText = tab === 'race-thanks' ? "🍁 感謝祭レース登録" : "🏁 通常レース登録";
+        resetForm();
         updateRaceListUI();
     }
 }
 
+// --- 通信コア ---
 function initPeer(role) {
     const room = document.getElementById('roomName').value;
     if(!room) return;
     myRole = role;
+    applyThanksgivingVisual(isThanksgiving); // モード初期反映
+    
     const pid = (role === 'monitor') ? room : room + "_" + role + "_" + Math.random().toString(36).slice(-4);
     peer = new Peer(pid);
     peer.on('open', () => {
@@ -254,6 +323,8 @@ function initPeer(role) {
             connToMonitor.on('open', () => {
                 connToMonitor.on('data', d => handleData(d));
                 showSection(role === 'controller' ? 'controller-screen' : 'guest-join-screen');
+                // 新規接続時に親機の現在の感謝祭状態を強制同期
+                connToMonitor.send({type: 'REQ_TG_SYNC'});
             });
         }
     });
@@ -261,19 +332,30 @@ function initPeer(role) {
 
 function handleData(d, senderConn = null) {
     if(myRole === 'monitor') {
+        if(d.type === 'REQ_TG_SYNC') {
+            if(senderConn) senderConn.send({ type: 'TG_MODE_SYNC', enabled: isThanksgiving });
+        }
         if(d.type === 'JOIN') {
             guestBalances[senderConn.peer] = { name: d.name, chips: 1000, isTemp: d.isTemp || false };
+            senderConn.send({ type: 'TG_MODE_SYNC', enabled: isThanksgiving });
             if(currentRace) {
-                senderConn.send({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal });
+                senderConn.send({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving });
                 senderConn.send({ type: 'UPDATE_STATE', horses: currentRace.horses, balances: guestBalances });
             }
         }
         if(d.type === 'REQ_PICK') {
             currentRaceNum++;
-            const pick = racePool[Math.floor(Math.random()*racePool.length)];
+            // 感謝祭ON/OFFで抽選プールを完全に切り替える
+            const activePool = isThanksgiving ? thanksRacePool : racePool;
+            if(activePool.length === 0) {
+                alert("選択されたモードのレースデータが空です。登録してください。");
+                currentRaceNum--;
+                return;
+            }
+            const pick = activePool[Math.floor(Math.random()*activePool.length)];
             currentRace = JSON.parse(JSON.stringify(pick));
             currentRace.horses.forEach(h => { h.pool=0; h.bets={}; h.currentOdds=h.initialOdds; });
-            broadcast({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal });
+            broadcast({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving });
             renderMonitorUI();
         }
         if(d.type === 'BET') {
@@ -312,11 +394,21 @@ function handleData(d, senderConn = null) {
         }
     }
 
-    // 操作パネル・子機共通処理
+    // 操作パネル・運営ゲスト処理
+    if(d.type === 'TG_MODE_SYNC') {
+        isThanksgiving = d.enabled;
+        applyThanksgivingVisual(isThanksgiving);
+    }
     if(d.type === 'RACE_SET') {
         currentRace = d.race; currentRaceNum = d.num; seriesTotal = d.total;
+        if(d.tgMode !== undefined) applyThanksgivingVisual(d.tgMode);
         tempBets = {}; confirmedBets = {};
         document.getElementById('result-screen').style.display = 'none';
+        
+        // レースが始まったら感謝祭の切り替えエリアをロック（誤操作防止）
+        const tgArea = document.getElementById('ctrl-tg-toggle-area');
+        if(tgArea) tgArea.classList.add('hidden');
+
         if(myRole === 'controller') { updateCtrlUI('pre-race'); document.getElementById('ctrl-race-title').innerText = `RACE ${currentRaceNum}/${seriesTotal}`; }
         if(myRole === 'guest') renderGuestBetting();
     }
@@ -334,10 +426,18 @@ function handleData(d, senderConn = null) {
     }
     if(d.type === 'CLOSE_UI') {
         document.getElementById('result-screen').style.display = 'none';
-        if(myRole === 'controller') updateCtrlUI('next-action');
+        if(myRole === 'controller') {
+            updateCtrlUI('next-action');
+            // 次のレース抽選待ちの間は感謝祭のトグルを再表示
+            const tgArea = document.getElementById('ctrl-tg-toggle-area');
+            if(tgArea) tgArea.classList.remove('hidden');
+        }
     }
     if(d.type === 'RESET_STATE') {
         document.getElementById('result-screen').style.display = 'none';
+        const tgArea = document.getElementById('ctrl-tg-toggle-area');
+        if(tgArea) tgArea.classList.remove('hidden');
+        
         if(myRole === 'controller') {
             updateCtrlUI('initial');
             document.getElementById('ctrl-race-title').innerText = "READY";
@@ -350,6 +450,7 @@ function handleData(d, senderConn = null) {
     }
 }
 
+// --- モニターカウントダウン演出 ---
 function startMonitorCountdown(targetTime) {
     const o = document.getElementById('countdown-overlay'); o.style.display = 'block';
     const timer = setInterval(() => {
@@ -376,6 +477,7 @@ function finalizeRace() {
     showVisualResult({ winner: winner.name, payouts });
 }
 
+// --- 運営ゲスト（タブレット側操作） ---
 function guestJoin() { 
     const n = document.getElementById('playerName').value.trim(); 
     if(n && connToMonitor) { 
@@ -412,6 +514,7 @@ function renderGuestBetting() {
         </div>`).join('');
 }
 
+// --- リザルト・ランキング表示 ---
 function showVisualResult(d) {
     if(myRole === 'controller') return;
     const screen = document.getElementById('result-screen'); screen.style.display = 'flex';
@@ -420,7 +523,6 @@ function showVisualResult(d) {
     document.getElementById('res-winner').innerText = d.winner;
     document.getElementById('res-payout-list').innerHTML = d.payouts.map(p => `<div>${p.name}: <span style="color:var(--accent)">+${p.win}</span></div>`).join('');
 }
-
 function showRankingUI(rank) {
     if(myRole === 'controller') return;
     const screen = document.getElementById('result-screen'); screen.style.display = 'flex';
@@ -429,7 +531,7 @@ function showRankingUI(rank) {
     document.getElementById('final-rank-list').innerHTML = rank.map((p, i) => `<div>${i+1}位 ${p.name} (${p.chips})</div>`).join('');
 }
 
-// 過去バージョンから移植した「操作パネルのボタン表示制御ロジック」
+// --- 操作パネル用UI表示切替ロジック ---
 function updateCtrlUI(state) {
     ['ctrl-pre-race', 'ctrl-post-race', 'ctrl-final-action', 'ctrl-next-action', 'initialPickBtn'].forEach(id => {
         const el = document.getElementById(id);
@@ -442,9 +544,19 @@ function updateCtrlUI(state) {
     else if(state === 'initial') document.getElementById('initialPickBtn').classList.remove('hidden');
 }
 
+// --- レースデータ管理（通常・感謝祭セパレート） ---
 function updateRaceListUI() {
     const container = document.getElementById('race-list-display');
-    if(container) container.innerHTML = racePool.map(r => `<div class="race-card"><div><b>${r.name}</b></div><div><button class="mini-btn" style="background:var(--blue);" onclick="editRace('${r.id}')">編集</button> <button class="mini-btn" style="background:var(--red);" onclick="deleteRace('${r.id}')">削除</button></div></div>`).join('');
+    if(!container) return;
+    const targetPool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
+    container.innerHTML = targetPool.map(r => `
+        <div class="race-card">
+            <div><b>${r.name}</b></div>
+            <div>
+                <button class="mini-btn" style="background:var(--blue);" onclick="editRace('${r.id}')">編集</button> 
+                <button class="mini-btn" style="background:var(--red);" onclick="deleteRace('${r.id}')">削除</button>
+            </div>
+        </div>`).join('');
 }
 function openDataManager() { showSection('data-manager'); switchDataTab('config'); }
 function addHorseField(data = null) {
@@ -457,18 +569,37 @@ function applyToPool() {
     const id = document.getElementById('editingId').value || "R_" + Date.now();
     const horses = Array.from(document.querySelectorAll('.horse-input-row')).map(row => ({ name: row.querySelector('.h-name').value || "無名", initialOdds: parseFloat(row.querySelector('.h-odds').value) || 1.5, rank: parseInt(row.querySelector('.h-rank').value) || 0 }));
     const file = document.getElementById('videoFile').files[0]; if(file) videoMap.set(id, URL.createObjectURL(file));
-    const idx = racePool.findIndex(r => r.id === id);
-    if(idx > -1) racePool[idx] = {id, name, horses}; else racePool.push({id, name, horses});
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(racePool)); resetForm(); updateRaceListUI(); alert("保存しました");
+    
+    let targetPool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
+    const idx = targetPool.findIndex(r => r.id === id);
+    if(idx > -1) targetPool[idx] = {id, name, horses}; else targetPool.push({id, name, horses});
+    
+    if(currentDataTab === 'race-thanks') {
+        localStorage.setItem(THANKS_STORAGE_KEY, JSON.stringify(thanksRacePool));
+    } else {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(racePool));
+    }
+    resetForm(); updateRaceListUI(); alert("保存しました");
 }
 function resetForm() { document.getElementById('editingId').value = ""; document.getElementById('raceName').value = ""; document.getElementById('horse-inputs').innerHTML = ""; addHorseField(); addHorseField(); }
 function editRace(id) {
-    const r = racePool.find(x => x.id === id); if(!r) return;
+    const targetPool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
+    const r = targetPool.find(x => x.id === id); if(!r) return;
     document.getElementById('editingId').value = r.id; document.getElementById('raceName').value = r.name;
     document.getElementById('horse-inputs').innerHTML = ""; r.horses.forEach(h => addHorseField(h));
     window.scrollTo(0,0);
 }
-function deleteRace(id) { if(!confirm("削除しますか？")) return; racePool = racePool.filter(r => r.id !== id); localStorage.setItem(STORAGE_KEY, JSON.stringify(racePool)); updateRaceListUI(); }
+function deleteRace(id) {
+    if(!confirm("削除しますか？")) return;
+    if(currentDataTab === 'race-thanks') {
+        thanksRacePool = thanksRacePool.filter(r => r.id !== id);
+        localStorage.setItem(THANKS_STORAGE_KEY, JSON.stringify(thanksRacePool));
+    } else {
+        racePool = racePool.filter(r => r.id !== id);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(racePool));
+    }
+    updateRaceListUI();
+}
 
 function renderMonitorUI() {
     document.getElementById('mon-status').innerText = `RACE ${currentRaceNum} / ${seriesTotal}`;
