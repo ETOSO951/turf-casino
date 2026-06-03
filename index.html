@@ -3,16 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>UMA1 GP - v24 Seamless Reset</title>
+    <title>UMA1 GP - v24 Seamless Reset (Standard)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode.js@1.5.3/qrcode.min.js"></script>
     <style>
         :root { --turf: #0a2e1a; --gold: #ffd700; --panel: rgba(0,0,0,0.95); --accent: #00ff88; --red: #ff4757; --blue: #54a0ff; }
         body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--turf); color: #fff; margin: 0; padding: 10px; overflow-x: hidden; }
         .container { max-width: 600px; margin: auto; }
         .board { background: var(--panel); border: 2px solid var(--gold); border-radius: 15px; padding: 20px; margin-bottom: 20px; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
-        .btn { background: linear-gradient(180deg, var(--gold) 0%, #b8860b 100%); border: none; padding: 15px; color: #000; font-weight: bold; border-radius: 8px; width: 100%; margin: 10px 0; cursor: pointer; }
-        .btn:hover { opacity: 0.8; }
+        .btn { background: linear-gradient(180deg, var(--gold) 0%, #b8860b 100%); border: none; padding: 15px; color: #000; font-weight: bold; border-radius: 8px; width: 100%; margin: 10px 0; cursor: pointer; font-size: 16px; }
         .btn:active { transform: translateY(2px); box-shadow: 0 2px #664d00; }
         .mini-btn { padding: 10px; font-size: 12px; border-radius: 5px; border: none; cursor: pointer; color: #fff; font-weight: bold; margin: 2px; }
         .hidden { display: none !important; }
@@ -23,17 +21,12 @@
         .horse-input-row { display: grid; grid-template-columns: 2fr 1fr 1fr 40px; gap: 5px; margin-bottom: 10px; }
         .config-card { background: rgba(0,255,136,0.1); padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 3px solid var(--accent); display: flex; justify-content: space-between; align-items: center; }
         .config-card.active { background: rgba(0,255,136,0.25); border-left: 3px solid var(--gold); }
-        #qr-container { text-align: center; margin: 20px 0; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 10px; }
-        #qr-code { display: inline-block; background: white; padding: 15px; border-radius: 8px; margin: 10px 0; }
-        #qr-code img { max-width: 320px; width: auto; height: auto; display: block; }
-        .qr-info { font-size: 14px; color: #aaa; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div id="countdown-overlay">10</div>
 
-<!-- リザルト画面 -->
 <div id="result-screen">
     <div id="res-race-part">
         <h1 style="color:var(--accent);">RACE RESULT</h1>
@@ -52,39 +45,23 @@
         <button class="btn" onclick="openDataManager()" style="margin:0; flex:1; background:#333; color:#fff;">データ管理</button>
     </div>
 
-    <!-- 1. 初期設定 -->
     <div id="setup-screen" class="section board">
         <h2 style="text-align:center; color:var(--gold);">UMA1 GP</h2>
         <input type="text" id="roomName" placeholder="合言葉">
         <input type="number" id="seriesCount" value="1" placeholder="総レース数">
         <button class="btn" onclick="initPeer('monitor')">モニター起動</button>
         <button class="btn" onclick="initPeer('controller')" style="background:var(--blue); color:#fff;">操作パネル接続</button>
-        <button class="btn" onclick="initPeer('ipad')" style="background:#fff; color:#000;">iPad接続</button>
+        <button class="btn" onclick="initPeer('guest')" style="background:#fff; color:#000;">運営タブレット参加</button>
     </div>
 
-    <!-- モニター画面 -->
-    <div id="monitor-screen" class="section hidden board" style="text-align:center;">
-        <p id="mon-status" style="color:var(--accent); margin:0;"></p>
-        <h1 id="mon-race-name" style="color:var(--gold); font-size:2.5em; margin:10px 0;">待機中</h1>
-        <div id="qr-container">
-            <div style="color:var(--accent); font-weight:bold; margin-bottom:10px;">📱 参加用QRコード</div>
-            <div id="qr-code"></div>
-            <div class="qr-info">スマートフォンで読み取って参加</div>
-        </div>
-        <div id="mon-odds-list" style="text-align:left; border-top:1px solid #333; padding-top:10px;"></div>
-    </div>
-
-    <!-- 2. データ管理 -->
     <div id="data-manager" class="section hidden board">
         <h2 style="text-align:center; color:var(--gold); margin-top:0;">⚙️ データ管理</h2>
         
-        <!-- タブ -->
         <div style="display:flex; gap:10px; margin-bottom:20px;">
             <button class="mini-btn" style="background:var(--blue); flex:1;" onclick="switchDataTab('config')">設定プリセット</button>
             <button class="mini-btn" style="background:#666; flex:1;" onclick="switchDataTab('race')">レース管理</button>
         </div>
 
-        <!-- 設定プリセット管理タブ -->
         <div id="config-tab">
             <div style="margin-bottom:15px;">
                 <label style="font-size:12px; color:#aaa;">現在の設定値</label>
@@ -94,12 +71,11 @@
             </div>
 
             <div>
-                <label style="font-size:12px; color:#aaa; display:block; margin-bottom:10px;">📂 保存済みプリセット</label>
+                <label style="font-size:12px; color:#aaa; display:block; margin-bottom:10px;">📁 保存済みプリセット</label>
                 <div id="preset-list"></div>
             </div>
         </div>
 
-        <!-- レース管理タブ -->
         <div id="race-tab" class="hidden">
             <div class="board" style="background:rgba(0,0,0,0.5); border:1px solid #444; padding:15px;">
                 <h3 id="form-title" style="margin:0 0 15px 0; color:var(--gold);">🏁 レース登録</h3>
@@ -117,7 +93,6 @@
         <button class="btn" onclick="showSection('setup-screen')" style="background:#333; margin-top:20px;">← 戻る</button>
     </div>
 
-    <!-- 3. 操作パネル -->
     <div id="controller-screen" class="section hidden board">
         <h3 id="ctrl-race-title" style="text-align:center; color:var(--gold);">待機中</h3>
         <div id="ctrl-pre-race" class="hidden">
@@ -135,16 +110,24 @@
         <button id="initialPickBtn" class="btn" onclick="requestPickRace()">レースを抽選開始</button>
     </div>
 
-    <!-- 4. ゲスト馬券画面 -->
+    <div id="monitor-screen" class="section hidden board" style="text-align:center;">
+        <p id="mon-status" style="color:var(--accent); margin:0;"></p>
+        <h1 id="mon-race-name" style="color:var(--gold); font-size:2.5em; margin:10px 0;">待機中</h1>
+        <div id="mon-odds-list" style="text-align:left; border-top:1px solid #333; padding-top:10px;"></div>
+    </div>
+
+    <div id="guest-join-screen" class="section hidden board">
+        <h3 style="text-align:center;">運営用タブレット 参加登録</h3>
+        <input type="text" id="playerName" placeholder="名前を入力">
+        <button class="btn" onclick="guestJoin()">参加</button>
+    </div>
+
     <div id="guest-screen" class="section hidden board">
         <div style="display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #333; padding-bottom:10px;">
             <b id="display-name" style="color:var(--gold);">---</b>
             <span>CHIPS: <b id="my-chips" style="color:var(--accent);">1000</b></span>
         </div>
         <div id="betting-area"></div>
-        <div id="logout-message" class="hidden" style="text-align:center; margin-top:20px; color:var(--red); font-weight:bold;">
-            ゲーム終了しました。画面を閉じてください。
-        </div>
     </div>
 </div>
 
@@ -155,8 +138,6 @@ let racePool = [], videoMap = new Map();
 let peer = null, connections = [], connToMonitor = null;
 let currentRace = null, myChips = 1000, currentRaceNum = 0, seriesTotal = 0;
 let tempBets = {}, confirmedBets = {}, guestBalances = {}, myRole = '';
-let sessionToken = '', connectionTypes = new Map();
-let qrCodeInstance = null;
 const STORAGE_KEY = 'turf_v24_final';
 const PRESET_KEY = 'turf_presets';
 const DEFAULT_PRESET_KEY = 'turf_default_preset';
@@ -167,54 +148,8 @@ window.onload = () => {
     updateRaceListUI();
     updatePresetList();
     loadDefaultPreset();
-    
-    // URLパラメータから接続情報を取得
-    const params = new URLSearchParams(window.location.search);
-    const roomFromUrl = params.get('room');
-    const tokenFromUrl = params.get('token');
-    const typeFromUrl = params.get('type');
-    
-    if(roomFromUrl && tokenFromUrl && typeFromUrl === 'mobile-guest') {
-        document.getElementById('roomName').value = roomFromUrl;
-        sessionToken = tokenFromUrl;
-        initPeer('mobile-guest');
-    }
 };
 
-// --- QRコード生成 ---
-function generateQRCode(roomName) {
-    const container = document.getElementById('qr-code');
-    container.innerHTML = ''; // 前の内容をクリア
-    
-    // スマホからアクセスするためのURL
-    const baseUrl = window.location.origin + window.location.pathname;
-    const token = 'tok_' + Math.random().toString(36).slice(2, 11) + Date.now().toString(36);
-    const qrUrl = `${baseUrl}?room=${encodeURIComponent(roomName)}&token=${token}&type=mobile-guest`;
-    
-    console.log('Generating QR for:', qrUrl);
-    
-    // QRコード生成 - qrcode.js (古いバージョン互換)
-    try {
-        const qr = new QRCode(container, {
-            text: qrUrl,
-            width: 280,
-            height: 280,
-            colorDark: '#000000',
-            colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.H
-        });
-        console.log('✓ QRコード生成成功');
-    } catch(e) {
-        console.error('✗ QRコード生成エラー:', e);
-        container.innerHTML = '<div style="color:red; padding:20px; background:white; border-radius:8px;">QRコード生成失敗: ' + e.message + '</div>';
-    }
-    
-    // トークンを保存（検証用）
-    if(!window.validTokens) window.validTokens = {};
-    window.validTokens[token] = { room: roomName, type: 'mobile-guest', createdAt: Date.now() };
-}
-
-// --- 設定プリセット管理 ---
 function getPresets() {
     const data = localStorage.getItem(PRESET_KEY);
     return data ? JSON.parse(data) : [];
@@ -245,7 +180,7 @@ function updatePresetList() {
         <div class="config-card ${p.id === defaultPresetId ? 'active' : ''}">
             <div>
                 <div style="font-weight:bold;">${p.name}</div>
-                <div style="font-size:12px; color:#aaa;">🔐 ${p.roomName} / ${p.seriesCount}レース ${p.id === defaultPresetId ? '⭐ デフォルト' : ''}</div>
+                <div style="font-size:12px; color:#aaa;">🔑 ${p.roomName} / ${p.seriesCount}レース ${p.id === defaultPresetId ? '⭐ デフォルト' : ''}</div>
             </div>
             <div style="display:flex; gap:3px;">
                 <button class="mini-btn" style="background:var(--blue); padding:6px 10px;" onclick="applyPreset('${p.id}')">読込</button>
@@ -301,68 +236,37 @@ function switchDataTab(tab) {
     }
 }
 
-// --- 通信コア ---
 function initPeer(role) {
     const room = document.getElementById('roomName').value;
-    if(!room) {
-        alert('合言葉を入力してください');
-        return;
-    }
-    console.log('initPeer called with role:', role, 'room:', room);
+    if(!room) return;
     myRole = role;
     const pid = (role === 'monitor') ? room : room + "_" + role + "_" + Math.random().toString(36).slice(-4);
-    console.log('Creating peer with id:', pid);
     peer = new Peer(pid);
-    
     peer.on('open', () => {
-        console.log('Peer opened with id:', peer.id);
         document.getElementById('nav-tabs').classList.add('hidden');
         if(role === 'monitor') {
             seriesTotal = parseInt(document.getElementById('seriesCount').value) || 1;
             showSection('monitor-screen');
-            console.log('Showing monitor screen, generating QR code');
-            setTimeout(() => generateQRCode(room), 500);
-            peer.on('connection', c => { 
-                console.log('Connection received:', c.peer);
-                connections.push(c); 
-                connectionTypes.set(c.peer, c.metadata?.type || 'unknown');
-                c.on('data', d => handleData(d, c)); 
-            });
+            peer.on('connection', c => { connections.push(c); c.on('data', d => handleData(d, c)); });
         } else {
-            console.log('Connecting to monitor:', room);
-            connToMonitor = peer.connect(room, { 
-                metadata: { type: role, token: sessionToken } 
-            });
+            connToMonitor = peer.connect(room);
             connToMonitor.on('open', () => {
-                console.log('Connected to monitor');
                 connToMonitor.on('data', d => handleData(d));
-                if(role === 'controller') showSection('controller-screen');
-                else if(role === 'ipad' || role === 'mobile-guest') {
-                    const n = role === 'ipad' ? 'iPad' : 'Guest_' + Math.random().toString(36).slice(2, 8);
-                    connToMonitor.send({type:'JOIN', name:n});
-                    showSection('guest-screen');
-                    document.getElementById('display-name').innerText = n;
-                }
-            });
-            connToMonitor.on('error', (err) => {
-                console.error('Connection error:', err);
-                alert('接続失敗: ' + err.message);
+                showSection(role === 'controller' ? 'controller-screen' : 'guest-join-screen');
             });
         }
-    });
-    
-    peer.on('error', (err) => {
-        console.error('Peer error:', err);
-        alert('エラー: ' + err.message);
     });
 }
 
 function handleData(d, senderConn = null) {
     if(myRole === 'monitor') {
         if(d.type === 'JOIN') {
-            const connType = senderConn.metadata?.type || 'unknown';
-            guestBalances[senderConn.peer] = { name: d.name, chips: 1000, type: connType };
-            connectionTypes.set(senderConn.peer, connType);
+            guestBalances[senderConn.peer] = { name: d.name, chips: 1000, isTemp: d.isTemp || false };
+            // 現在すでに選ばれているレースがあれば、途中参加したスマホにも反映
+            if(currentRace) {
+                senderConn.send({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal });
+                senderConn.send({ type: 'UPDATE_STATE', horses: currentRace.horses, balances: guestBalances });
+            }
         }
         if(d.type === 'REQ_PICK') {
             currentRaceNum++;
@@ -391,11 +295,6 @@ function handleData(d, senderConn = null) {
                 const rank = Object.values(guestBalances).sort((a,b)=>b.chips-a.chips);
                 broadcast({ type: 'SHOW_RANKING', rank });
                 showRankingUI(rank);
-                connections.forEach(c => {
-                    if(connectionTypes.get(c.peer) === 'mobile-guest') {
-                        c.send({ type: 'FORCE_LOGOUT' });
-                    }
-                });
             } else {
                 broadcast({ type: 'CLOSE_UI' });
                 document.getElementById('result-screen').style.display = 'none';
@@ -410,38 +309,28 @@ function handleData(d, senderConn = null) {
             document.getElementById('mon-race-name').innerText = "READY";
             document.getElementById('mon-odds-list').innerHTML = "";
             document.getElementById('mon-status').innerText = "";
-            connections = connections.filter(c => {
-                if(connectionTypes.get(c.peer) === 'mobile-guest') {
-                    c.close();
-                    return false;
-                }
-                return true;
-            });
         }
     }
 
+    // 操作パネル・子機共通処理
     if(d.type === 'RACE_SET') {
         currentRace = d.race; currentRaceNum = d.num; seriesTotal = d.total;
         tempBets = {}; confirmedBets = {};
         document.getElementById('result-screen').style.display = 'none';
         if(myRole === 'controller') { updateCtrlUI('pre-race'); document.getElementById('ctrl-race-title').innerText = `RACE ${currentRaceNum}/${seriesTotal}`; }
-        if(myRole === 'ipad' || myRole === 'mobile-guest') renderGuestBetting();
+        if(myRole === 'guest') renderGuestBetting();
     }
     if(d.type === 'UPDATE_STATE') {
-        currentRace.horses = d.horses;
-        if((myRole === 'ipad' || myRole === 'mobile-guest') && d.balances[peer.id]) { 
-            myChips = d.balances[peer.id].chips; 
-            updateGuestChipsUI(); 
-            updateGuestOddsUI(); 
-        }
+        if(currentRace) currentRace.horses = d.horses;
+        if(myRole === 'guest' && d.balances[peer.id]) { myChips = d.balances[peer.id].chips; updateGuestChipsUI(); updateGuestOddsUI(); }
     }
     if(d.type === 'RESULT_PACK') {
         if(myRole === 'controller') updateCtrlUI('post-race');
-        if(myRole === 'ipad' || myRole === 'mobile-guest') showVisualResult(d);
+        showVisualResult(d);
     }
     if(d.type === 'SHOW_RANKING') {
         if(myRole === 'controller') updateCtrlUI('final-action');
-        if(myRole === 'ipad' || myRole === 'mobile-guest') showRankingUI(d.rank);
+        showVisualResult(d);
     }
     if(d.type === 'CLOSE_UI') {
         document.getElementById('result-screen').style.display = 'none';
@@ -453,19 +342,11 @@ function handleData(d, senderConn = null) {
             updateCtrlUI('initial');
             document.getElementById('ctrl-race-title').innerText = "READY";
         }
-        if(myRole === 'ipad' || myRole === 'mobile-guest') {
+        if(myRole === 'guest') {
             myChips = 1000;
-            document.getElementById('display-name').innerText = myRole === 'ipad' ? 'iPad' : '---';
-            showSection('guest-screen');
+            document.getElementById('playerName').value = "";
+            showSection('guest-join-screen');
         }
-    }
-    if(d.type === 'FORCE_LOGOUT') {
-        document.getElementById('betting-area').classList.add('hidden');
-        document.getElementById('logout-message').classList.remove('hidden');
-        setTimeout(() => {
-            alert('ゲーム終了しました');
-            window.close();
-        }, 3000);
     }
 }
 
@@ -495,6 +376,15 @@ function finalizeRace() {
     showVisualResult({ winner: winner.name, payouts });
 }
 
+function guestJoin() { 
+    const n = document.getElementById('playerName').value.trim(); 
+    if(n && connToMonitor) { 
+        connToMonitor.send({type:'JOIN', name:n, isTemp: false}); 
+        showSection('guest-screen'); 
+        document.getElementById('display-name').innerText = n; 
+        document.getElementById('my-chips').innerText = "1000";
+    } 
+}
 function changeBet(i, a) { if(myChips >= a) { myChips -= a; tempBets[i] = (tempBets[i]||0) + a; updateGuestChipsUI(); updateBetRow(i); } }
 function cancelBet(i) { myChips += (tempBets[i] || 0); tempBets[i] = 0; updateGuestChipsUI(); updateBetRow(i); }
 function confirmBet(i) {
@@ -505,9 +395,10 @@ function confirmBet(i) {
 }
 function updateBetRow(i) { document.getElementById(`g-status-${i}`).innerText = `確定:${confirmedBets[i]||0} / 準備:${tempBets[i]||0}`; }
 function updateGuestChipsUI() { document.getElementById('my-chips').innerText = myChips; }
-function updateGuestOddsUI(){ currentRace.horses.forEach((h,i) => { const el=document.getElementById(`g-odd-${i}`); if(el) el.innerText='x'+h.currentOdds.toFixed(2); }); }
+function updateGuestOddsUI(){ if(currentRace) currentRace.horses.forEach((h,i) => { const el=document.getElementById(`g-odd-${i}`); if(el) el.innerText='x'+h.currentOdds.toFixed(2); }); }
 
 function renderGuestBetting() {
+    if(!currentRace) return;
     document.getElementById('betting-area').innerHTML = currentRace.horses.map((h, i) => `
         <div class="board" style="padding:15px; margin-bottom:10px;">
             <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><b>${h.name}</b> <span id="g-odd-${i}" style="color:var(--gold)">x${h.currentOdds.toFixed(2)}</span></div>
@@ -529,42 +420,27 @@ function showVisualResult(d) {
     document.getElementById('res-winner').innerText = d.winner;
     document.getElementById('res-payout-list').innerHTML = d.payouts.map(p => `<div>${p.name}: <span style="color:var(--accent)">+${p.win}</span></div>`).join('');
 }
-function showRankingUI(rankData) {
-    if(myRole === 'controller') return;
-    const screen = document.getElementById('result-screen'); screen.style.display = 'flex';
-    document.getElementById('res-race-part').classList.add('hidden');
-    document.getElementById('res-final-part').classList.remove('hidden');
-    document.getElementById('final-rank-list').innerHTML = rankData.map((r,i) => `<div>${i+1}位 ${r.name} (${r.chips})</div>`).join('');
-}
-function updateCtrlUI(state) {
-    ['ctrl-pre-race', 'ctrl-post-race', 'ctrl-final-action', 'ctrl-next-action', 'initialPickBtn'].forEach(id => document.getElementById(id).classList.add('hidden'));
-    if(state === 'pre-race') document.getElementById('ctrl-pre-race').classList.remove('hidden');
-    else if(state === 'post-race') document.getElementById('ctrl-post-race').classList.remove('hidden');
-    else if(state === 'final-action') document.getElementById('ctrl-final-action').classList.remove('hidden');
-    else if(state === 'next-action') document.getElementById('ctrl-next-action').classList.remove('hidden');
-    else if(state === 'initial') document.getElementById('initialPickBtn').classList.remove('hidden');
-}
 
 function updateRaceListUI() {
     const container = document.getElementById('race-list-display');
-    container.innerHTML = racePool.map(r => `<div class="race-card"><div><b>${r.name}</b></div><div><button class="mini-btn" style="background:var(--blue);" onclick="editRace('${r.id}')">編集</button><button class="mini-btn" style="background:var(--red);" onclick="deleteRace('${r.id}')">削除</button></div></div>`).join('');
+    if(container) container.innerHTML = racePool.map(r => `<div class="race-card"><div><b>${r.name}</b></div><div><button class="mini-btn" style="background:var(--blue);" onclick="editRace('${r.id}')">編集</button> <button class="mini-btn" style="background:var(--red);" onclick="deleteRace('${r.id}')">削除</button></div></div>`).join('');
 }
 function openDataManager() { showSection('data-manager'); switchDataTab('config'); }
 function addHorseField(data = null) {
     const div = document.createElement('div'); div.className = "horse-input-row";
-    div.innerHTML = `<input type="text" placeholder="馬名" class="h-name" value="${data?data.name:''}"> <input type="number" step="0.1" class="h-odds" value="${data?data.initialOdds:'2.0'}"> <select class="h-rank"><option value="">着順</option><option value="1">1着</option><option value="2">2着</option><option value="3">3着</option></select> <button class="mini-btn" style="background:var(--red); padding:10px; cursor:pointer;" onclick="this.parentElement.remove()">✕</button>`;
+    div.innerHTML = `<input type="text" placeholder="馬名" class="h-name" value="${data?data.name:''}"> <input type="number" step="0.1" class="h-odds" value="${data?data.initialOdds:'2.0'}"> <select class="h-rank" style="padding:8px;"><option value="">順位</option><option value="1" ${data?.rank===1?'selected':''}>1位</option><option value="2" ${data?.rank===2?'selected':''}>2位</option><option value="3" ${data?.rank===3?'selected':''}>3位</option></select> <button class="mini-btn" style="background:var(--red); padding:8px; margin:0;" onclick="this.parentElement.remove()">×</button>`;
     document.getElementById('horse-inputs').appendChild(div);
 }
 function applyToPool() {
     const name = document.getElementById('raceName').value.trim(); if(!name) return;
     const id = document.getElementById('editingId').value || "R_" + Date.now();
-    const horses = Array.from(document.querySelectorAll('.horse-input-row')).map(row => ({ name: row.querySelector('.h-name').value || "無名", initialOdds: parseFloat(row.querySelector('.h-odds').value) || 2.0, rank: parseInt(row.querySelector('.h-rank').value) || 0 }));
+    const horses = Array.from(document.querySelectorAll('.horse-input-row')).map(row => ({ name: row.querySelector('.h-name').value || "無名", initialOdds: parseFloat(row.querySelector('.h-odds').value) || 1.5, rank: parseInt(row.querySelector('.h-rank').value) || 0 }));
     const file = document.getElementById('videoFile').files[0]; if(file) videoMap.set(id, URL.createObjectURL(file));
     const idx = racePool.findIndex(r => r.id === id);
     if(idx > -1) racePool[idx] = {id, name, horses}; else racePool.push({id, name, horses});
     localStorage.setItem(STORAGE_KEY, JSON.stringify(racePool)); resetForm(); updateRaceListUI(); alert("保存しました");
 }
-function resetForm() { document.getElementById('editingId').value = ""; document.getElementById('raceName').value = ""; document.getElementById('videoFile').value = ""; document.getElementById('horse-inputs').innerHTML = ""; }
+function resetForm() { document.getElementById('editingId').value = ""; document.getElementById('raceName').value = ""; document.getElementById('horse-inputs').innerHTML = ""; addHorseField(); addHorseField(); }
 function editRace(id) {
     const r = racePool.find(x => x.id === id); if(!r) return;
     document.getElementById('editingId').value = r.id; document.getElementById('raceName').value = r.name;
@@ -576,7 +452,7 @@ function deleteRace(id) { if(!confirm("削除しますか？")) return; racePool
 function renderMonitorUI() {
     document.getElementById('mon-status').innerText = `RACE ${currentRaceNum} / ${seriesTotal}`;
     document.getElementById('mon-race-name').innerText = currentRace.name;
-    document.getElementById('mon-odds-list').innerHTML = currentRace.horses.map(h => `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #222;"><span>${h.name}</span><span style="color:var(--gold)">x${h.currentOdds.toFixed(2)}</span></div>`).join('');
+    document.getElementById('mon-odds-list').innerHTML = currentRace.horses.map(h => `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #222;"><span>${h.name}</span> <span style="color:var(--gold)">x${h.currentOdds.toFixed(2)} (Pool: ${h.pool})</span></div>`).join('');
 }
 function updateOdds() {
     const total = currentRace.horses.reduce((s, h) => s + h.pool, 0);
