@@ -196,6 +196,30 @@ window.onload = () => {
     loadDefaultPreset();
 };
 
+// --- 通信データ一斉配信用のブロードキャスト関数 ---
+function broadcast(data) {
+    if (myRole === 'monitor') {
+        connections.forEach(conn => {
+            if (conn.open) conn.send(data);
+        });
+    } else if (connToMonitor && connToMonitor.open) {
+        connToMonitor.send(data);
+    }
+}
+
+// --- セクション切り替え用関数 ---
+function showSection(sectionId) {
+    document.querySelectorAll('.container .section').forEach(el => el.classList.add('hidden'));
+    const target = document.getElementById(sectionId);
+    if (target) target.classList.remove('hidden');
+}
+
+// --- 操作パネルからの要求送信関数群 ---
+function requestPickRace() { if (connToMonitor) connToMonitor.send({ type: 'REQ_PICK' }); }
+function requestCountdown() { if (connToMonitor) connToMonitor.send({ type: 'REQ_COUNTDOWN' }); }
+function requestCloseResult() { if (connToMonitor) connToMonitor.send({ type: 'REQ_CLOSE_RES' }); }
+function requestSystemReset() { if (confirm("本当に最初からやり直しますか？") && connToMonitor) connToMonitor.send({ type: 'REQ_RESET' }); }
+
 // --- 感謝祭モードのON/OFF切り替えロジック ---
 function toggleThanksgivingMode() {
     isThanksgiving = !isThanksgiving;
@@ -246,6 +270,7 @@ function updatePresetList() {
     const presets = getPresets();
     const defaultPresetId = localStorage.getItem(DEFAULT_PRESET_KEY);
     const container = document.getElementById('preset-list');
+    if (!container) return;
     container.innerHTML = presets.map(p => `
         <div class="config-card ${p.id === defaultPresetId ? 'active' : ''}">
             <div>
@@ -332,6 +357,13 @@ function initPeer(role) {
 
 function handleData(d, senderConn = null) {
     if(myRole === 'monitor') {
+        // 親機（モニター）が感謝祭切替データを受信したら、状態を全端末へブロードキャスト転送する
+        if(d.type === 'TG_MODE_SYNC') {
+            isThanksgiving = d.enabled;
+            applyThanksgivingVisual(isThanksgiving);
+            broadcast(d);
+            return;
+        }
         if(d.type === 'REQ_TG_SYNC') {
             if(senderConn) senderConn.send({ type: 'TG_MODE_SYNC', enabled: isThanksgiving });
         }
@@ -345,7 +377,6 @@ function handleData(d, senderConn = null) {
         }
         if(d.type === 'REQ_PICK') {
             currentRaceNum++;
-            // 感謝祭ON/OFFで抽選プールを完全に切り替える
             const activePool = isThanksgiving ? thanksRacePool : racePool;
             if(activePool.length === 0) {
                 alert("選択されたモードのレースデータが空です。登録してください。");
@@ -394,10 +425,13 @@ function handleData(d, senderConn = null) {
         }
     }
 
-    // 操作パネル・運営ゲスト処理
+    // 各子機（操作パネル・運営ゲスト・カウントダウン）のデータ処理
     if(d.type === 'TG_MODE_SYNC') {
         isThanksgiving = d.enabled;
         applyThanksgivingVisual(isThanksgiving);
+    }
+    if(d.type === 'COUNT_SYNC') {
+        if(myRole !== 'monitor') startMonitorCountdown(d.t);
     }
     if(d.type === 'RACE_SET') {
         currentRace = d.race; currentRaceNum = d.num; seriesTotal = d.total;
@@ -405,7 +439,6 @@ function handleData(d, senderConn = null) {
         tempBets = {}; confirmedBets = {};
         document.getElementById('result-screen').style.display = 'none';
         
-        // レースが始まったら感謝祭の切り替えエリアをロック（誤操作防止）
         const tgArea = document.getElementById('ctrl-tg-toggle-area');
         if(tgArea) tgArea.classList.add('hidden');
 
@@ -428,7 +461,6 @@ function handleData(d, senderConn = null) {
         document.getElementById('result-screen').style.display = 'none';
         if(myRole === 'controller') {
             updateCtrlUI('next-action');
-            // 次のレース抽選待ちの間は感謝祭のトグルを再表示
             const tgArea = document.getElementById('ctrl-tg-toggle-area');
             if(tgArea) tgArea.classList.remove('hidden');
         }
@@ -455,7 +487,7 @@ function startMonitorCountdown(targetTime) {
     const o = document.getElementById('countdown-overlay'); o.style.display = 'block';
     const timer = setInterval(() => {
         const rem = Math.ceil((targetTime - Date.now()) / 1000);
-        if(rem <= 0) { clearInterval(timer); o.style.display = 'none'; playVideo(); }
+        if(rem <= 0) { clearInterval(timer); o.style.display = 'none'; if(myRole === 'monitor') playVideo(); }
         else o.innerText = rem;
     }, 100);
 }
@@ -520,8 +552,8 @@ function showVisualResult(d) {
     const screen = document.getElementById('result-screen'); screen.style.display = 'flex';
     document.getElementById('res-race-part').classList.remove('hidden');
     document.getElementById('res-final-part').classList.add('hidden');
-    document.getElementById('res-winner').innerText = d.winner;
-    document.getElementById('res-payout-list').innerHTML = d.payouts.map(p => `<div>${p.name}: <span style="color:var(--accent)">+${p.win}</span></div>`).join('');
+    document.getElementById('res-winner').innerText = d.winner || "---";
+    document.getElementById('res-payout-list').innerHTML = d.payouts ? d.payouts.map(p => `<div>${p.name}: <span style="color:var(--accent)">+${p.win}</span></div>`).join('') : "";
 }
 function showRankingUI(rank) {
     if(myRole === 'controller') return;
@@ -606,17 +638,23 @@ function renderMonitorUI() {
     document.getElementById('mon-race-name').innerText = currentRace.name;
     document.getElementById('mon-odds-list').innerHTML = currentRace.horses.map(h => `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #222;"><span>${h.name}</span> <span style="color:var(--gold)">x${h.currentOdds.toFixed(2)} (Pool: ${h.pool})</span></div>`).join('');
 }
-function updateOdds() {
-    const total = currentRace.horses.reduce((s, h) => s + h.pool, 0);
-    currentRace.horses.forEach(h => { const adj = 200; h.currentOdds = Math.max(1.1, (total + adj) / (h.pool + (adj / h.initialOdds))); });
-}
 
-function broadcast(d) { connections.forEach(c => c.open && c.send(d)); }
-function showSection(id) { document.querySelectorAll('.section').forEach(s => s.classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); }
-function requestPickRace() { if(connToMonitor) connToMonitor.send({ type: 'REQ_PICK' }); }
-function requestCountdown() { if(connToMonitor) connToMonitor.send({ type: 'REQ_COUNTDOWN' }); }
-function requestCloseResult() { if(connToMonitor) connToMonitor.send({ type: 'REQ_CLOSE_RES' }); }
-function requestSystemReset() { if(connToMonitor) connToMonitor.send({ type: 'REQ_RESET' }); }
+// --- オッズ連動計算ロジック（途切れていた箇所を補完） ---
+function updateOdds() {
+    let totalPool = 0;
+    currentRace.horses.forEach(h => totalPool += h.pool);
+    if (totalPool === 0) return;
+    
+    currentRace.horses.forEach(h => {
+        if (h.pool > 0) {
+            // パリミュチュエル方式に準じた傾斜配分（元オッズをベースにプール金比率で変動）
+            let calculatedOdds = (totalPool / h.pool) * 0.8; 
+            h.currentOdds = Math.max(1.1, Math.min(calculatedOdds, h.initialOdds * 5));
+        } else {
+            h.currentOdds = h.initialOdds;
+        }
+    });
+}
 </script>
 </body>
 </html>
