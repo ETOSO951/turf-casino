@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>UMA1 GP - v24 Stable Custom</title>
+    <title>UMA1 GP - v24 Monitor-Core Edition</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root { --turf: #0a2e1a; --gold: #ffd700; --panel: rgba(0,0,0,0.95); --accent: #00ff88; --red: #ff4757; --blue: #54a0ff; }
@@ -42,7 +42,7 @@
 <div class="container">
     <div id="nav-tabs" style="display:flex; gap:10px; margin-bottom:15px;">
         <button class="btn" onclick="showSection('setup-screen')" style="margin:0; flex:1;">設定</button>
-        <button class="btn" onclick="openDataManager()" style="margin:0; flex:1; background:#333; color:#fff;">データ管理</button>
+        <button id="nav-data-btn" class="btn" onclick="openDataManager()" style="margin:0; flex:1; background:#333; color:#fff;">データ管理(モニター用)</button>
     </div>
 
     <div id="setup-screen" class="section board">
@@ -55,7 +55,7 @@
     </div>
 
     <div id="data-manager" class="section hidden board">
-        <h2 style="text-align:center; color:var(--gold); margin-top:0;">⚙️ データ管理</h2>
+        <h2 style="text-align:center; color:var(--gold); margin-top:0;">⚙️ データ管理 (モニター)</h2>
         
         <div style="display:flex; gap:10px; margin-bottom:20px;">
             <button class="mini-btn" style="background:var(--blue); flex:1;" onclick="switchDataTab('config')">設定プリセット</button>
@@ -69,7 +69,6 @@
                 <input type="number" id="mgr-seriesCount" value="1" placeholder="総レース数" min="1" max="10">
                 <button class="btn" onclick="saveNewPreset()" style="background:var(--accent); color:#000; font-size:14px; padding:12px;">💾 新規保存</button>
             </div>
-
             <div>
                 <label style="font-size:12px; color:#aaa; display:block; margin-bottom:10px;">📂 保存済みプリセット</label>
                 <div id="preset-list"></div>
@@ -80,7 +79,7 @@
             <div class="board" style="background:rgba(0,0,0,0.5); border:1px solid #444; padding:15px;">
                 <h3 id="form-title" style="margin:0 0 15px 0; color:var(--gold);">🏁 レース登録</h3>
                 <input type="hidden" id="editingId">
-                <input type="text" id="raceName" placeholder="レース名（例: 感謝祭記念GP）">
+                <input type="text" id="raceName" placeholder="レース名">
                 <input type="file" id="videoFile" accept="video/*">
                 <div id="horse-inputs" style="margin-top:10px;"></div>
                 <button class="mini-btn" onclick="addHorseField()" style="background:#444; width:100%; margin:10px 0;">+ 馬を追加</button>
@@ -142,15 +141,20 @@ const STORAGE_KEY = 'turf_v24_final';
 const PRESET_KEY = 'turf_presets';
 const DEFAULT_PRESET_KEY = 'turf_default_preset';
 
+// モニター側でのみデータの初期読み込みを行う安全仕様
 window.onload = () => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if(saved) racePool = JSON.parse(saved);
-    updateRaceListUI();
-    updatePresetList();
-    loadDefaultPreset();
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if(saved) racePool = JSON.parse(saved);
+        updateRaceListUI();
+        updatePresetList();
+        loadDefaultPreset();
+    } catch(e) {
+        console.log("初期化スキップ（モニター以外の接続端末）");
+    }
 };
 
-// --- 設定プリセット管理 ---
+// --- 設定プリセット管理（モニター専用） ---
 function getPresets() {
     const data = localStorage.getItem(PRESET_KEY);
     return data ? JSON.parse(data) : [];
@@ -174,9 +178,10 @@ function saveNewPreset() {
 }
 
 function updatePresetList() {
+    const container = document.getElementById('preset-list');
+    if(!container) return;
     const presets = getPresets();
     const defaultPresetId = localStorage.getItem(DEFAULT_PRESET_KEY);
-    const container = document.getElementById('preset-list');
     container.innerHTML = presets.map(p => `
         <div class="config-card ${p.id === defaultPresetId ? 'active' : ''}">
             <div>
@@ -195,8 +200,8 @@ function applyPreset(presetId) {
     const presets = getPresets();
     const preset = presets.find(p => p.id === presetId);
     if(preset) {
-        document.getElementById('mgr-roomName').value = preset.roomName;
-        document.getElementById('mgr-seriesCount').value = preset.seriesCount;
+        if(document.getElementById('mgr-roomName')) document.getElementById('mgr-roomName').value = preset.roomName;
+        if(document.getElementById('mgr-seriesCount')) document.getElementById('mgr-seriesCount').value = preset.seriesCount;
         document.getElementById('roomName').value = preset.roomName;
         document.getElementById('seriesCount').value = preset.seriesCount;
     }
@@ -307,7 +312,7 @@ function handleData(d, senderConn = null) {
         }
     }
 
-    // クライアント側の処理
+    // クライアント側（操作パネル・ゲスト端末）のレシーブ処理
     if(d.type === 'RACE_SET') {
         currentRace = d.race; currentRaceNum = d.num; seriesTotal = d.total;
         tempBets = {}; confirmedBets = {};
@@ -433,9 +438,10 @@ function updateCtrlUI(state) {
     else if(state === 'initial') document.getElementById('initialPickBtn').classList.remove('hidden');
 }
 
-// 登録・管理
+// 登録・管理（モニター専用UI）
 function updateRaceListUI() {
     const container = document.getElementById('race-list-display');
+    if(!container) return;
     container.innerHTML = racePool.map(r => `<div class="race-card"><div><b>${r.name}</b></div><div><button class="mini-btn" style="background:var(--blue);" onclick="editRace('${r.id}')">編集</button> <button class="mini-btn" style="background:var(--red);" onclick="deleteRace('${r.id}')">削除</button></div></div>`).join('');
 }
 function openDataManager() { showSection('data-manager'); switchDataTab('config'); }
