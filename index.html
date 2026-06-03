@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>UMA1 GP - Main System (Thanksgiving Edition)</title>
+    <title>UMA1 GP - Main System (Seamless Sync & Video Saved Edition)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root { 
@@ -110,7 +110,11 @@
                 <h3 id="form-title" style="margin:0 0 15px 0; color:var(--gold);">🏁 レース登録</h3>
                 <input type="hidden" id="editingId">
                 <input type="text" id="raceName" placeholder="レース名">
-                <input type="file" id="videoFile" accept="video/*">
+                <div style="margin-bottom:10px;">
+                    <label style="font-size:12px; color:#ccc; display:block;">動画ファイル (※Base64でデータ保存されます)</label>
+                    <input type="file" id="videoFile" accept="video/*">
+                    <div id="video-status" style="font-size:11px; color:var(--accent); margin-top:2px;"></div>
+                </div>
                 <div id="horse-inputs" style="margin-top:10px;"></div>
                 <button class="mini-btn" onclick="addHorseField()" style="background:#444; width:100%; margin:10px 0;">+ 馬を追加</button>
                 <button id="apply-btn" class="btn" onclick="applyToPool()" style="background:var(--accent); color:#000; font-size:14px; padding:12px;">保存して一覧を更新</button>
@@ -173,7 +177,7 @@
 <video id="mainVideo" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#000; display:none; z-index:9999;" playsinline></video>
 
 <script>
-let racePool = [], thanksRacePool = [], videoMap = new Map();
+let racePool = [], thanksRacePool = [];
 let currentDataTab = 'race-normal'; // 'race-normal' または 'race-thanks'
 let isThanksgiving = false; // 感謝祭フラグ
 
@@ -225,8 +229,10 @@ function toggleThanksgivingMode() {
     isThanksgiving = !isThanksgiving;
     applyThanksgivingVisual(isThanksgiving);
     
-    // 全ての子機（スマホゲスト等）に現在の感謝祭モード状態を同期
-    broadcast({ type: 'TG_MODE_SYNC', enabled: isThanksgiving });
+    // 親機（モニター）経由で全子機に現在の感謝祭モード状態を同期要求
+    if (connToMonitor && connToMonitor.open) {
+        connToMonitor.send({ type: 'TG_MODE_SYNC', enabled: isThanksgiving });
+    }
 }
 
 function applyThanksgivingVisual(enable) {
@@ -348,7 +354,6 @@ function initPeer(role) {
             connToMonitor.on('open', () => {
                 connToMonitor.on('data', d => handleData(d));
                 showSection(role === 'controller' ? 'controller-screen' : 'guest-join-screen');
-                // 新規接続時に親機の現在の感謝祭状態を強制同期
                 connToMonitor.send({type: 'REQ_TG_SYNC'});
             });
         }
@@ -357,15 +362,19 @@ function initPeer(role) {
 
 function handleData(d, senderConn = null) {
     if(myRole === 'monitor') {
-        // 親機（モニター）が感謝祭切替データを受信したら、状態を全端末へブロードキャスト転送する
+        // 親機が感謝祭変更命令を受け取った場合
         if(d.type === 'TG_MODE_SYNC') {
             isThanksgiving = d.enabled;
             applyThanksgivingVisual(isThanksgiving);
-            broadcast(d);
+            // 他の全ての子機へ状態の転送をかける
+            connections.forEach(conn => {
+                if (conn.open) conn.send({ type: 'TG_MODE_SYNC', enabled: isThanksgiving });
+            });
             return;
         }
         if(d.type === 'REQ_TG_SYNC') {
             if(senderConn) senderConn.send({ type: 'TG_MODE_SYNC', enabled: isThanksgiving });
+            return;
         }
         if(d.type === 'JOIN') {
             guestBalances[senderConn.peer] = { name: d.name, chips: 1000, isTemp: d.isTemp || false };
@@ -374,6 +383,7 @@ function handleData(d, senderConn = null) {
                 senderConn.send({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving });
                 senderConn.send({ type: 'UPDATE_STATE', horses: currentRace.horses, balances: guestBalances });
             }
+            return;
         }
         if(d.type === 'REQ_PICK') {
             currentRaceNum++;
@@ -388,6 +398,7 @@ function handleData(d, senderConn = null) {
             currentRace.horses.forEach(h => { h.pool=0; h.bets={}; h.currentOdds=h.initialOdds; });
             broadcast({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving });
             renderMonitorUI();
+            return;
         }
         if(d.type === 'BET') {
             const h = currentRace.horses[d.idx];
@@ -397,11 +408,13 @@ function handleData(d, senderConn = null) {
             updateOdds();
             broadcast({ type: 'UPDATE_STATE', horses: currentRace.horses, balances: guestBalances });
             renderMonitorUI();
+            return;
         }
         if(d.type === 'REQ_COUNTDOWN') {
             const t = Date.now() + 10500;
             broadcast({ type: 'COUNT_SYNC', t });
             startMonitorCountdown(t);
+            return;
         }
         if(d.type === 'REQ_CLOSE_RES') {
             if(currentRaceNum >= seriesTotal) {
@@ -412,6 +425,7 @@ function handleData(d, senderConn = null) {
                 broadcast({ type: 'CLOSE_UI' });
                 document.getElementById('result-screen').style.display = 'none';
             }
+            return;
         }
         if(d.type === 'REQ_RESET') {
             currentRaceNum = 0;
@@ -422,10 +436,11 @@ function handleData(d, senderConn = null) {
             document.getElementById('mon-race-name').innerText = "READY";
             document.getElementById('mon-odds-list').innerHTML = "";
             document.getElementById('mon-status').innerText = "";
+            return;
         }
     }
 
-    // 各子機（操作パネル・運営ゲスト・カウントダウン）のデータ処理
+    // 各子機（共通レシーブ）のデータ処理
     if(d.type === 'TG_MODE_SYNC') {
         isThanksgiving = d.enabled;
         applyThanksgivingVisual(isThanksgiving);
@@ -492,9 +507,11 @@ function startMonitorCountdown(targetTime) {
     }, 100);
 }
 async function playVideo() {
-    const v = document.getElementById('mainVideo'); const url = videoMap.get(currentRace.id);
-    if(!url) return finalizeRace();
-    v.src = url; v.style.display = 'block';
+    const v = document.getElementById('mainVideo'); 
+    // メモリマップではなく、現在のレースオブジェクト内に直に入っている動画ソース(Base64)を取得
+    const videoData = currentRace ? currentRace.videoSrc : null;
+    if(!videoData) return finalizeRace();
+    v.src = videoData; v.style.display = 'block';
     try { await v.play(); } catch(e) { v.muted = true; await v.play(); }
     v.onended = () => { v.style.display = 'none'; finalizeRace(); };
 }
@@ -576,14 +593,19 @@ function updateCtrlUI(state) {
     else if(state === 'initial') document.getElementById('initialPickBtn').classList.remove('hidden');
 }
 
-// --- レースデータ管理（通常・感謝祭セパレート） ---
+// --- レースデータ管理（Base64変換による完全永続化実装） ---
 function updateRaceListUI() {
     const container = document.getElementById('race-list-display');
     if(!container) return;
     const targetPool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
     container.innerHTML = targetPool.map(r => `
         <div class="race-card">
-            <div><b>${r.name}</b></div>
+            <div>
+                <b>${r.name}</b> 
+                <span style="font-size:10px; color:${r.videoSrc ? 'var(--accent)' : 'var(--red)'}; ml-2">
+                    ${r.videoSrc ? '📺 動画有' : '❌ 動画無'}
+                </span>
+            </div>
             <div>
                 <button class="mini-btn" style="background:var(--blue);" onclick="editRace('${r.id}')">編集</button> 
                 <button class="mini-btn" style="background:var(--red);" onclick="deleteRace('${r.id}')">削除</button>
@@ -596,33 +618,81 @@ function addHorseField(data = null) {
     div.innerHTML = `<input type="text" placeholder="馬名" class="h-name" value="${data?data.name:''}"> <input type="number" step="0.1" class="h-odds" value="${data?data.initialOdds:'2.0'}"> <select class="h-rank" style="padding:8px;"><option value="">順位</option><option value="1" ${data?.rank===1?'selected':''}>1位</option><option value="2" ${data?.rank===2?'selected':''}>2位</option><option value="3" ${data?.rank===3?'selected':''}>3位</option></select> <button class="mini-btn" style="background:var(--red); padding:8px; margin:0;" onclick="this.parentElement.remove()">×</button>`;
     document.getElementById('horse-inputs').appendChild(div);
 }
+
+// 過去の安定版で使われたFileReaderを使った完全保存ロジック
 function applyToPool() {
-    const name = document.getElementById('raceName').value.trim(); if(!name) return;
+    const name = document.getElementById('raceName').value.trim(); 
+    if(!name) return alert("レース名を入力してください");
+    
     const id = document.getElementById('editingId').value || "R_" + Date.now();
-    const horses = Array.from(document.querySelectorAll('.horse-input-row')).map(row => ({ name: row.querySelector('.h-name').value || "無名", initialOdds: parseFloat(row.querySelector('.h-odds').value) || 1.5, rank: parseInt(row.querySelector('.h-rank').value) || 0 }));
-    const file = document.getElementById('videoFile').files[0]; if(file) videoMap.set(id, URL.createObjectURL(file));
-    
+    const horses = Array.from(document.querySelectorAll('.horse-input-row')).map(row => ({
+        name: row.querySelector('.h-name').value || "無名",
+        initialOdds: parseFloat(row.querySelector('.h-odds').value) || 1.5,
+        rank: parseInt(row.querySelector('.h-rank').value) || 0
+    }));
+
+    const fileInput = document.getElementById('videoFile');
+    const file = fileInput.files[0];
     let targetPool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
-    const idx = targetPool.findIndex(r => r.id === id);
-    if(idx > -1) targetPool[idx] = {id, name, horses}; else targetPool.push({id, name, horses});
-    
-    if(currentDataTab === 'race-thanks') {
-        localStorage.setItem(THANKS_STORAGE_KEY, JSON.stringify(thanksRacePool));
+    const existingRace = targetPool.find(r => r.id === id);
+
+    const saveData = (base64VideoSrc) => {
+        const raceData = {
+            id,
+            name,
+            horses,
+            videoSrc: base64VideoSrc || (existingRace ? existingRace.videoSrc : null)
+        };
+
+        const idx = targetPool.findIndex(r => r.id === id);
+        if(idx > -1) targetPool[idx] = raceData; else targetPool.push(raceData);
+        
+        if(currentDataTab === 'race-thanks') {
+            localStorage.setItem(THANKS_STORAGE_KEY, JSON.stringify(thanksRacePool));
+        } else {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(racePool));
+        }
+        
+        resetForm(); 
+        updateRaceListUI(); 
+        alert("レースデータをローカルに完全保存しました");
+    };
+
+    if(file) {
+        document.getElementById('video-status').innerText = "動画変換中(Base64)... お待ちください";
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            saveData(e.target.result);
+        };
+        reader.readAsDataURL(file);
     } else {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(racePool));
+        saveData(null);
     }
-    resetForm(); updateRaceListUI(); alert("保存しました");
 }
-function resetForm() { document.getElementById('editingId').value = ""; document.getElementById('raceName').value = ""; document.getElementById('horse-inputs').innerHTML = ""; addHorseField(); addHorseField(); }
+
+function resetForm() { 
+    document.getElementById('editingId').value = ""; 
+    document.getElementById('raceName').value = ""; 
+    document.getElementById('videoFile').value = "";
+    document.getElementById('video-status').innerText = "";
+    document.getElementById('horse-inputs').innerHTML = ""; 
+    addHorseField(); 
+    addHorseField(); 
+}
+
 function editRace(id) {
     const targetPool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
-    const r = targetPool.find(x => x.id === id); if(!r) return;
-    document.getElementById('editingId').value = r.id; document.getElementById('raceName').value = r.name;
-    document.getElementById('horse-inputs').innerHTML = ""; r.horses.forEach(h => addHorseField(h));
-    window.scrollTo(0,0);
+    const r = targetPool.find(x => x.id === id);
+    if(!r) return;
+    document.getElementById('editingId').value = r.id; 
+    document.getElementById('raceName').value = r.name;
+    document.getElementById('video-status').innerText = r.videoSrc ? "保存済み動画データが引き継がれます" : "動画未登録";
+    document.getElementById('horse-inputs').innerHTML = ""; 
+    r.horses.forEach(h => addHorseField(h));
 }
+
 function deleteRace(id) {
-    if(!confirm("削除しますか？")) return;
+    if(!confirm("本当に削除しますか？")) return;
     if(currentDataTab === 'race-thanks') {
         thanksRacePool = thanksRacePool.filter(r => r.id !== id);
         localStorage.setItem(THANKS_STORAGE_KEY, JSON.stringify(thanksRacePool));
@@ -633,27 +703,16 @@ function deleteRace(id) {
     updateRaceListUI();
 }
 
+// --- モニター用UI更新 ---
 function renderMonitorUI() {
+    if(!currentRace) return;
     document.getElementById('mon-status').innerText = `RACE ${currentRaceNum} / ${seriesTotal}`;
     document.getElementById('mon-race-name').innerText = currentRace.name;
     document.getElementById('mon-odds-list').innerHTML = currentRace.horses.map(h => `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #222;"><span>${h.name}</span> <span style="color:var(--gold)">x${h.currentOdds.toFixed(2)} (Pool: ${h.pool})</span></div>`).join('');
 }
-
-// --- オッズ連動計算ロジック（途切れていた箇所を補完） ---
 function updateOdds() {
-    let totalPool = 0;
-    currentRace.horses.forEach(h => totalPool += h.pool);
-    if (totalPool === 0) return;
-    
-    currentRace.horses.forEach(h => {
-        if (h.pool > 0) {
-            // パリミュチュエル方式に準じた傾斜配分（元オッズをベースにプール金比率で変動）
-            let calculatedOdds = (totalPool / h.pool) * 0.8; 
-            h.currentOdds = Math.max(1.1, Math.min(calculatedOdds, h.initialOdds * 5));
-        } else {
-            h.currentOdds = h.initialOdds;
-        }
-    });
+    const total = currentRace.horses.reduce((s, h) => s + h.pool, 0);
+    currentRace.horses.forEach(h => { const adj = 200; h.currentOdds = Math.max(1.1, (total + adj) / (h.pool + (adj / h.initialOdds))); });
 }
 </script>
 </body>
