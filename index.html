@@ -67,7 +67,7 @@
         <h1 id="mon-race-name" style="color:var(--gold); font-size:2.5em; margin:10px 0;">待機中</h1>
         <div id="qr-container">
             <div style="color:var(--accent); font-weight:bold; margin-bottom:10px;">📱 参加用QRコード</div>
-            <div id="qr-code"></div>
+            <canvas id="qr-code"></canvas>
             <div class="qr-info">スマートフォンで読み取って参加</div>
         </div>
         <div id="mon-odds-list" style="text-align:left; border-top:1px solid #333; padding-top:10px;"></div>
@@ -182,8 +182,7 @@ window.onload = () => {
 
 // --- QRコード生成 ---
 function generateQRCode(roomName) {
-    const qrDiv = document.getElementById('qr-code');
-    qrDiv.innerHTML = '';
+    const canvas = document.getElementById('qr-code');
     
     // スマホからアクセスするためのURL
     const baseUrl = window.location.origin + window.location.pathname;
@@ -194,7 +193,7 @@ function generateQRCode(roomName) {
     
     // QRコード生成
     try {
-        QRCode.toCanvas(document.getElementById('qr-code'), qrUrl, {
+        QRCode.toCanvas(canvas, qrUrl, {
             errorCorrectionLevel: 'H',
             type: 'image/png',
             width: 250,
@@ -203,14 +202,12 @@ function generateQRCode(roomName) {
         }, function(error) {
             if(error) {
                 console.error('QRコード生成エラー:', error);
-                document.getElementById('qr-code').innerText = 'QR生成失敗';
             } else {
                 console.log('QRコード生成成功');
             }
         });
     } catch(e) {
         console.error('QRコード生成例外:', e);
-        document.getElementById('qr-code').innerText = '参加URL: ' + qrUrl;
     }
     
     // トークンを保存（検証用）
@@ -308,26 +305,37 @@ function switchDataTab(tab) {
 // --- 通信コア ---
 function initPeer(role) {
     const room = document.getElementById('roomName').value;
-    if(!room) return;
+    if(!room) {
+        alert('合言葉を入力してください');
+        return;
+    }
+    console.log('initPeer called with role:', role, 'room:', room);
     myRole = role;
     const pid = (role === 'monitor') ? room : room + "_" + role + "_" + Math.random().toString(36).slice(-4);
+    console.log('Creating peer with id:', pid);
     peer = new Peer(pid);
+    
     peer.on('open', () => {
+        console.log('Peer opened with id:', peer.id);
         document.getElementById('nav-tabs').classList.add('hidden');
         if(role === 'monitor') {
             seriesTotal = parseInt(document.getElementById('seriesCount').value) || 1;
             showSection('monitor-screen');
-            setTimeout(() => generateQRCode(room), 100);
+            console.log('Showing monitor screen, generating QR code');
+            setTimeout(() => generateQRCode(room), 500);
             peer.on('connection', c => { 
+                console.log('Connection received:', c.peer);
                 connections.push(c); 
                 connectionTypes.set(c.peer, c.metadata?.type || 'unknown');
                 c.on('data', d => handleData(d, c)); 
             });
         } else {
+            console.log('Connecting to monitor:', room);
             connToMonitor = peer.connect(room, { 
                 metadata: { type: role, token: sessionToken } 
             });
             connToMonitor.on('open', () => {
+                console.log('Connected to monitor');
                 connToMonitor.on('data', d => handleData(d));
                 if(role === 'controller') showSection('controller-screen');
                 else if(role === 'ipad' || role === 'mobile-guest') {
@@ -337,7 +345,16 @@ function initPeer(role) {
                     document.getElementById('display-name').innerText = n;
                 }
             });
+            connToMonitor.on('error', (err) => {
+                console.error('Connection error:', err);
+                alert('接続失敗: ' + err.message);
+            });
         }
+    });
+    
+    peer.on('error', (err) => {
+        console.error('Peer error:', err);
+        alert('エラー: ' + err.message);
     });
 }
 
