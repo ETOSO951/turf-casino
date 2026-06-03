@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>UMA1 GP - Main System 2(Seamless Sync & Video Saved Edition)</title>
+    <title>UMA1 GP - Main System (Seamless Sync & Video Saved Edition)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root { 
@@ -14,7 +14,6 @@
             --red: #ff4757; 
             --blue: #54a0ff; 
         }
-        /* 感謝祭（サンクスギビング）モード用のテーマカラー定義 */
         body.thanksgiving {
             --turf: #4a0e17; 
             --gold: #fff200; 
@@ -26,7 +25,6 @@
         .container { max-width: 600px; margin: auto; }
         .board { background: var(--panel); border: 2px solid var(--gold); border-radius: 15px; padding: 20px; margin-bottom: 20px; box-shadow: 0 0 15px rgba(0,0,0,0.5); position: relative; }
         
-        /* 感謝祭バッジ */
         .tg-badge { display: none; position: absolute; top: 0; right: 15px; background: #ff4757; color: #fff; padding: 4px 10px; font-size: 11px; font-weight: bold; border-radius: 0 0 8px 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); animation: pulse 1.5s infinite; }
         body.thanksgiving .tg-badge { display: block; }
 
@@ -200,7 +198,7 @@ window.onload = () => {
     loadDefaultPreset();
 };
 
-// --- 通信データ一斉配信用のブロードキャスト関数 ---
+// --- 通信データ一斉配信用のブロードキャスト関数（親機から全子機へ再配信） ---
 function broadcast(data) {
     if (myRole === 'monitor') {
         connections.forEach(conn => {
@@ -341,7 +339,6 @@ function updateOdds() {
     
     currentRace.horses.forEach(h => {
         if (h.pool && h.pool > 0) {
-            // 単純なパラミューチュエル方式の概算オッズ（マージン等を除く）
             let rawOdds = totalPool / h.pool;
             h.currentOdds = Math.max(1.1, parseFloat(rawOdds.toFixed(2)));
         } else {
@@ -398,6 +395,7 @@ function initPeer(role) {
 
 function handleData(d, senderConn = null) {
     if(myRole === 'monitor') {
+        // 親機（モニター）が操作パネルから感謝祭切り替え命令を受け取った場合、全子機へ転送
         if(d.type === 'TG_MODE_SYNC') {
             isThanksgiving = d.enabled;
             applyThanksgivingVisual(isThanksgiving);
@@ -432,6 +430,7 @@ function handleData(d, senderConn = null) {
             const pick = activePool[Math.floor(Math.random()*activePool.length)];
             currentRace = JSON.parse(JSON.stringify(pick));
             currentRace.horses.forEach(h => { h.pool=0; h.bets={}; h.currentOdds=h.initialOdds; });
+            // 抽選されたレース情報と一緒に最新の感謝祭モード状態(tgMode)を全員にブロードキャスト
             broadcast({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving });
             renderMonitorUI();
             return;
@@ -478,7 +477,7 @@ function handleData(d, senderConn = null) {
         }
     }
 
-    // 各子機（共通レシーブ）のデータ処理
+    // 各子機（操作パネル・ゲスト側共通）のデータ処理
     if(d.type === 'TG_MODE_SYNC') {
         isThanksgiving = d.enabled;
         applyThanksgivingVisual(isThanksgiving);
