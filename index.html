@@ -18,13 +18,13 @@
         .hidden { display: none !important; }
         input, select { width: 100%; padding: 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #444; margin: 5px 0; background: #111; color: #fff; }
         .race-card { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 10px; margin-top: 10px; border-left: 5px solid var(--blue); display: flex; justify-content: space-between; align-items: center; }
-        #countdown-overlay { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 200px; font-weight: bold; color: var(--gold); z-index: 10001; display: none; pointer-events: none; text-shadow: 0 0 20px rgba(255,215,0,0.5); }
+        #countdown-overlay { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 200px; font-weight: bold; color: var(--gold); z-index: 10001; display: none; pointer-events: none; }
         #result-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); z-index: 10000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         .horse-input-row { display: grid; grid-template-columns: 2fr 1fr 1fr 40px; gap: 5px; margin-bottom: 10px; }
         .config-card { background: rgba(0,255,136,0.1); padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 3px solid var(--accent); display: flex; justify-content: space-between; align-items: center; }
         .config-card.active { background: rgba(0,255,136,0.25); border-left: 3px solid var(--gold); }
         #qr-container { text-align: center; margin: 20px 0; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 10px; }
-        #qr-code { background: white; padding: 15px; border-radius: 8px; display: inline-block; margin: 10px 0; min-width: 280px; }
+        #qr-code { background: white; padding: 15px; border-radius: 8px; display: inline-block; margin: 10px 0; min-width: 280px; height: auto; }
         .qr-info { font-size: 14px; color: #aaa; margin-top: 10px; }
     </style>
 </head>
@@ -191,24 +191,18 @@ function generateQRCode(roomName) {
     
     console.log('Generating QR for:', qrUrl);
     
-    // QRコード生成
-    try {
-        QRCode.toCanvas(canvas, qrUrl, {
-            errorCorrectionLevel: 'H',
-            type: 'image/png',
-            width: 250,
-            margin: 1,
-            color: { dark: '#000000', light: '#FFFFFF' }
-        }, function(error) {
-            if(error) {
-                console.error('QRコード生成エラー:', error);
-            } else {
-                console.log('QRコード生成成功');
-            }
-        });
-    } catch(e) {
-        console.error('QRコード生成例外:', e);
-    }
+    // QRコード生成 - Promise形式で正しく処理
+    QRCode.toCanvas(canvas, qrUrl, {
+        errorCorrectionLevel: 'H',
+        type: 'image/png',
+        width: 250,
+        margin: 1,
+        color: { dark: '#000000', light: '#FFFFFF' }
+    }).then(() => {
+        console.log('QRコード生成成功');
+    }).catch(err => {
+        console.error('QRコード生成エラー:', err);
+    });
     
     // トークンを保存（検証用）
     if(!window.validTokens) window.validTokens = {};
@@ -556,24 +550,24 @@ function updateCtrlUI(state) {
 // 登録・管理
 function updateRaceListUI() {
     const container = document.getElementById('race-list-display');
-    container.innerHTML = racePool.map(r => `<div class="race-card"><div><b>${r.name}</b></div><div><button class="mini-btn" style="background:var(--blue);" onclick="editRace('${r.id}')">編集</button> <button class="mini-btn" style="background:var(--red);" onclick="deleteRace('${r.id}')">削除</button></div></div>`).join('');
+    container.innerHTML = racePool.map(r => `<div class="race-card"><div><b>${r.name}</b></div><div><button class="mini-btn" style="background:var(--blue);" onclick="editRace('${r.id}')">編集</button><button class="mini-btn" style="background:var(--red);" onclick="deleteRace('${r.id}')">削除</button></div></div>`).join('');
 }
 function openDataManager() { showSection('data-manager'); switchDataTab('config'); }
 function addHorseField(data = null) {
     const div = document.createElement('div'); div.className = "horse-input-row";
-    div.innerHTML = `<input type="text" placeholder="馬名" class="h-name" value="${data?data.name:''}"> <input type="number" step="0.1" class="h-odds" value="${data?data.initialOdds:'2.0'}"> <select class="h-rank"><option value="">順位未設定</option><option value="1" ${data?.rank===1?'selected':''}>1着</option><option value="2" ${data?.rank===2?'selected':''}>2着</option><option value="3" ${data?.rank===3?'selected':''}>3着</option></select> <button class="mini-btn" style="background:var(--red);" onclick="this.parentElement.remove()">削</button>`;
+    div.innerHTML = `<input type="text" placeholder="馬名" class="h-name" value="${data?data.name:''}"> <input type="number" step="0.1" class="h-odds" value="${data?data.initialOdds:'2.0'}"> <select class="h-rank"><option value="">着順</option><option value="1">1着</option><option value="2">2着</option><option value="3">3着</option></select> <button class="mini-btn" style="background:var(--red); padding:10px; cursor:pointer;" onclick="this.parentElement.remove()">✕</button>`;
     document.getElementById('horse-inputs').appendChild(div);
 }
 function applyToPool() {
     const name = document.getElementById('raceName').value.trim(); if(!name) return;
     const id = document.getElementById('editingId').value || "R_" + Date.now();
-    const horses = Array.from(document.querySelectorAll('.horse-input-row')).map(row => ({ name: row.querySelector('.h-name').value || "無名", initialOdds: parseFloat(row.querySelector('.h-odds').value) || 2.0, rank: parseInt(row.querySelector('.h-rank').value) || null }));
+    const horses = Array.from(document.querySelectorAll('.horse-input-row')).map(row => ({ name: row.querySelector('.h-name').value || "無名", initialOdds: parseFloat(row.querySelector('.h-odds').value) || 2.0, rank: parseInt(row.querySelector('.h-rank').value) || 0 }));
     const file = document.getElementById('videoFile').files[0]; if(file) videoMap.set(id, URL.createObjectURL(file));
     const idx = racePool.findIndex(r => r.id === id);
     if(idx > -1) racePool[idx] = {id, name, horses}; else racePool.push({id, name, horses});
     localStorage.setItem(STORAGE_KEY, JSON.stringify(racePool)); resetForm(); updateRaceListUI(); alert("保存しました");
 }
-function resetForm() { document.getElementById('editingId').value = ""; document.getElementById('raceName').value = ""; document.getElementById('videoFile').value = ""; document.getElementById('horse-inputs').innerHTML = ""; addHorseField(); addHorseField(); }
+function resetForm() { document.getElementById('editingId').value = ""; document.getElementById('raceName').value = ""; document.getElementById('videoFile').value = ""; document.getElementById('horse-inputs').innerHTML = ""; }
 function editRace(id) {
     const r = racePool.find(x => x.id === id); if(!r) return;
     document.getElementById('editingId').value = r.id; document.getElementById('raceName').value = r.name;
@@ -586,7 +580,7 @@ function deleteRace(id) { if(!confirm("削除しますか？")) return; racePool
 function renderMonitorUI() {
     document.getElementById('mon-status').innerText = `RACE ${currentRaceNum} / ${seriesTotal}`;
     document.getElementById('mon-race-name').innerText = currentRace.name;
-    document.getElementById('mon-odds-list').innerHTML = currentRace.horses.map(h => `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #222;"><span>${h.name}</span> <span style="color:var(--gold)">x${h.currentOdds.toFixed(2)}</span></div>`).join('');
+    document.getElementById('mon-odds-list').innerHTML = currentRace.horses.map(h => `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #222;"><span>${h.name}</span><span style="color:var(--gold)">x${h.currentOdds.toFixed(2)}</span></div>`).join('');
 }
 function updateOdds() {
     const total = currentRace.horses.reduce((s, h) => s + h.pool, 0);
