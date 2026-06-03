@@ -183,17 +183,72 @@ let peer = null, connections = [], connToMonitor = null;
 let currentRace = null, myChips = 1000, currentRaceNum = 0, seriesTotal = 0;
 let tempBets = {}, confirmedBets = {}, guestBalances = {}, myRole = '';
 
-const STORAGE_KEY = 'turf_v24_final';
-const THANKS_STORAGE_KEY = 'turf_v24_thanks';
+const DB_NAME = 'TurfAppDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'races';
+
 const PRESET_KEY = 'turf_presets';
 const DEFAULT_PRESET_KEY = 'turf_default_preset';
 
+// --- IndexedDB の初期化とデータ操作用共通関数 ---
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            }
+        };
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+    });
+}
+
+async function loadPoolsFromDB() {
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.getAll();
+        
+        request.onsuccess = () => {
+            const allData = request.result || [];
+            // 通常レースと感謝祭レースを識別してプールに振り分け
+            racePool = allData.filter(r => r.dataType !== 'race-thanks');
+            thanksRacePool = allData.filter(r => r.dataType === 'race-thanks');
+            updateRaceListUI();
+        };
+    } catch (e) {
+        console.error("DB読み込み失敗:", e);
+    }
+}
+
+async function saveRaceToDB(raceData) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.put(raceData);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function deleteRaceFromDB(id) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// 起動時にDBからデータを読み込む
 window.onload = () => {
-    const savedNormal = localStorage.getItem(STORAGE_KEY);
-    if(savedNormal) racePool = JSON.parse(savedNormal);
-    const savedThanks = localStorage.getItem(THANKS_STORAGE_KEY);
-    if(savedThanks) thanksRacePool = JSON.parse(savedThanks);
-    
+    loadPoolsFromDB();
     updatePresetList();
     loadDefaultPreset();
 };
@@ -249,7 +304,7 @@ function applyThanksgivingVisual(enable) {
     }
 }
 
-// --- 設定プリセット制御 ---
+// --- 設定プリセット制御（こちらは軽量データのためlocalStorageのまま維持） ---
 function getPresets() {
     const data = localStorage.getItem(PRESET_KEY);
     return data ? JSON.parse(data) : [];
@@ -395,7 +450,6 @@ function initPeer(role) {
 
 function handleData(d, senderConn = null) {
     if(myRole === 'monitor') {
-        // 親機（モニター）が操作パネルから感謝祭切り替え命令を受け取った場合、全子機へ転送
         if(d.type === 'TG_MODE_SYNC') {
             isThanksgiving = d.enabled;
             applyThanksgivingVisual(isThanksgiving);
@@ -430,7 +484,6 @@ function handleData(d, senderConn = null) {
             const pick = activePool[Math.floor(Math.random()*activePool.length)];
             currentRace = JSON.parse(JSON.stringify(pick));
             currentRace.horses.forEach(h => { h.pool=0; h.bets={}; h.currentOdds=h.initialOdds; });
-            // 抽選されたレース情報と一緒に最新の感謝祭モード状態(tgMode)を全員にブロードキャスト
             broadcast({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving });
             renderMonitorUI();
             return;
@@ -477,7 +530,6 @@ function handleData(d, senderConn = null) {
         }
     }
 
-    // 各子機（操作パネル・ゲスト側共通）のデータ処理
     if(d.type === 'TG_MODE_SYNC') {
         isThanksgiving = d.enabled;
         applyThanksgivingVisual(isThanksgiving);
@@ -547,14 +599,30 @@ function startMonitorCountdown(targetTime) {
         else o.innerText = rem;
     }, 100);
 }
+
 async function playVideo() {
     const v = document.getElementById('mainVideo'); 
     const videoData = currentRace ? currentRace.videoSrc : null;
     if(!videoData) return finalizeRace();
-    v.src = videoData; v.style.display = 'block';
+
+    // IndexedDBから読み込まれた動画がBlob(File型)の場合は、再生用の一次URLを作る
+    if(videoData instanceof Blob) {
+        v.src = URL.createObjectURL(videoData);
+    } else {
+        v.src = videoData; 
+    }
+    
+    v.style.display = 'block';
     try { await v.play(); } catch(e) { v.muted = true; await v.play(); }
-    v.onended = () => { v.style.display = 'none'; finalizeRace(); };
+    v.onended = () => { 
+        v.style.display = 'none'; 
+        if(v.src.startsWith('blob:')) {
+            URL.revokeObjectURL(v.src); // メモリ解放
+        }
+        finalizeRace(); 
+    };
 }
+
 function finalizeRace() {
     const winner = currentRace.horses.find(h => parseInt(h.rank) === 1);
     const winnerName = winner ? winner.name : "なし";
@@ -657,6 +725,7 @@ function updateRaceListUI() {
             </div>
         </div>`).join('');
 }
+
 function openDataManager() { showSection('data-manager'); switchDataTab('config'); }
 function addHorseField(data = null) {
     const div = document.createElement('div'); div.className = "horse-input-row";
@@ -674,7 +743,8 @@ function resetForm() {
     document.getElementById('apply-btn').innerText = "保存して一覧を更新";
 }
 
-function applyToPool() {
+// 【大幅変更】大容量ファイル対応のため、DBへの非同期保存処理に変更
+async function applyToPool() {
     const name = document.getElementById('raceName').value.trim(); 
     if(!name) return alert("レース名を入力してください");
     
@@ -688,29 +758,36 @@ function applyToPool() {
     if(horses.length === 0) return alert("馬を1頭以上登録してください");
 
     const fileInput = document.getElementById('videoFile');
-    const saveObj = (videoSrcData) => {
-        const raceData = { id, name, horses, videoSrc: videoSrcData };
-        let pool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
-        const idx = pool.findIndex(r => r.id === id);
-        
-        if(idx >= 0) pool[idx] = raceData;
-        else pool.push(raceData);
+    document.getElementById('video-status').innerText = "データを書き込み中...";
 
-        localStorage.setItem(currentDataTab === 'race-thanks' ? THANKS_STORAGE_KEY : STORAGE_KEY, JSON.stringify(pool));
-        resetForm();
-        updateRaceListUI();
-        alert("レースを保存しました");
-    };
+    let videoData = null;
 
     if(fileInput.files.length > 0) {
-        const reader = new FileReader();
-        document.getElementById('video-status').innerText = "動画処理中...";
-        reader.onload = (e) => saveObj(e.target.result);
-        reader.readAsDataURL(fileInput.files[0]);
+        // Base64に変換せず、動画の生の塊(Blob/File)のまま保存することでフリーズを完全に回避
+        videoData = fileInput.files[0];
     } else {
         const pool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
         const existing = pool.find(r => r.id === id);
-        saveObj(existing ? existing.videoSrc : null);
+        videoData = existing ? existing.videoSrc : null;
+    }
+
+    const raceData = { 
+        id, 
+        name, 
+        horses, 
+        videoSrc: videoData,
+        dataType: currentDataTab // データの識別タグ
+    };
+
+    try {
+        await saveRaceToDB(raceData);
+        await loadPoolsFromDB(); // DBから再ロードして変数とUIを更新
+        resetForm();
+        alert("レースを保存しました");
+    } catch (e) {
+        console.error(e);
+        alert("保存中にエラーが発生しました。");
+        document.getElementById('video-status').innerText = "保存失敗";
     }
 }
 
@@ -731,16 +808,15 @@ function editRace(id) {
     document.getElementById('apply-btn').innerText = "変更を上書き保存";
 }
 
-function deleteRace(id) {
+// 【変更】削除処理も IndexedDB 用に非同期化
+async function deleteRace(id) {
     if(!confirm("本当に削除しますか？")) return;
-    if(currentDataTab === 'race-thanks') {
-        thanksRacePool = thanksRacePool.filter(r => r.id !== id);
-        localStorage.setItem(THANKS_STORAGE_KEY, JSON.stringify(thanksRacePool));
-    } else {
-        racePool = racePool.filter(r => r.id !== id);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(racePool));
+    try {
+        await deleteRaceFromDB(id);
+        await loadPoolsFromDB(); // 再読み込み
+    } catch(e) {
+        alert("削除に失敗しました");
     }
-    updateRaceListUI();
 }
 </script>
 </body>
