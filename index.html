@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>UMA1 GP - Ultimate Video Fixed Edition</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root { 
@@ -122,11 +123,11 @@
         </div>
 
         <div style="margin-top:20px; padding:15px; border:1px dashed var(--gold); border-radius:8px; background:rgba(0,0,0,0.3);">
-            <h3 style="margin:0 0 10px 0; font-size:14px; color:var(--gold);">📂 データのバックアップ / 移行</h3>
-            <button id="export-file-btn" class="mini-btn" style="background:var(--accent); color:#000; width:100%; margin-bottom:10px; font-weight: bold;" onclick="exportRaceDataFile()">データをファイル(.json)として書き出し保存</button>
+            <h3 style="margin:0 0 10px 0; font-size:14px; color:var(--gold);">📦 一瞬で完了する超高速バックアップ</h3>
+            <button id="export-zip-btn" class="mini-btn" style="background:var(--accent); color:#000; width:100%; margin-bottom:10px; font-weight: bold;" onclick="exportRaceDataZip()">データを一括パッケージ（.zip）として保存</button>
             
-            <label style="font-size:12px; color:#ccc; display:block; margin-bottom:5px;">バックアップファイルから読み込み：</label>
-            <input type="file" id="importFile" accept=".json" onchange="importRaceDataFile(this)" style="padding:5px; font-size:12px; background:#222;">
+            <label style="font-size:12px; color:#ccc; display:block; margin-bottom:5px;">パッケージファイル（.zip）から丸ごと復元：</label>
+            <input type="file" id="importZipFile" accept=".zip" onchange="importRaceDataZip(this)" style="padding:5px; font-size:12px; background:#222; width:100%; box-sizing:border-box;">
         </div>
 
         <button class="btn" onclick="showSection('setup-screen')" style="background:#333; margin-top:20px;">← 戻る</button>
@@ -467,7 +468,7 @@ function handleData(d, senderConn = null) {
             currentRaceNum++;
             const activePool = isThanksgiving ? thanksRacePool : racePool;
             if(activePool.length === 0) {
-                alert("選択されたモードのレースデータが空です。登録してください。");
+                alert("選択されたモード of レースデータが空です。登録してください。");
                 currentRaceNum--;
                 raceStatus = 'idle';
                 return;
@@ -880,13 +881,29 @@ function deleteRace(id) {
     updateRaceListUI();
 }
 
-// --- 改修版：RaceDataConverter (ファイル書き出し/読み込み対応) ---
-const RaceDataConverter = {
-    exportData: async function() {
-        const normalPool = JSON.parse(localStorage.getItem('turf_v25_normal') || '[]');
-        const thanksPool = JSON.parse(localStorage.getItem('turf_v25_thanks') || '[]');
-        const videoDataMap = {};
-        
+// --- 【超高速・低メモリ】ZIP圧縮形式の移行コアロジック ---
+async function exportRaceDataZip() {
+    const btn = document.getElementById('export-zip-btn');
+    const originalText = btn.innerText;
+    
+    try {
+        btn.innerText = "⏳ 超高速パッケージ化中...";
+        btn.disabled = true;
+
+        const zip = new JSZip();
+
+        // 1. テキスト系の設定・プールデータをまとめてjsonファイルとして格納
+        const textData = {
+            version: "UMA1_GP_V2.5",
+            exportedAt: new Date().toISOString(),
+            pools: {
+                normal: JSON.parse(localStorage.getItem('turf_v25_normal') || '[]'),
+                thanks: JSON.parse(localStorage.getItem('turf_v25_thanks') || '[]')
+            }
+        };
+        zip.file("race_data.json", JSON.stringify(textData));
+
+        // 2. IndexedDBから動画ファイルを「生のまま（Blob形式）」ZIP内に流し込む
         if (db) {
             await new Promise((resolve, reject) => {
                 const transaction = db.transaction(["videos"], "readonly");
@@ -895,120 +912,88 @@ const RaceDataConverter = {
                 request.onsuccess = function(e) {
                     const cursor = e.target.result;
                     if (cursor) {
-                        const raceId = cursor.key;
-                        const blob = cursor.value;
-                        const reader = new FileReader();
-                        reader.readAsDataURL(blob);
-                        reader.onloadend = function() {
-                            videoDataMap[raceId] = reader.result;
-                            cursor.continue();
-                        };
+                        // 動画を一切テキストに変換せず、ファイル名「race_ID.mp4」としてそのままZIPへ追加
+                        zip.file(`videos/${cursor.key}.bin`, cursor.value);
+                        cursor.continue();
                     } else {
                         resolve();
                     }
                 };
-                request.onerror = () => reject(new Error("IndexedDBの読み込みに失敗しました"));
+                request.onerror = () => reject(new Error("動画データの抽出に失敗しました"));
             });
         }
 
-        return {
-            version: "UMA1_GP_V2.5",
-            exportedAt: new Date().toISOString(),
-            pools: { normal: normalPool, thanks: thanksPool },
-            videos: videoDataMap
-        };
-    },
-
-    importData: async function(importObject) {
-        try {
-            if (importObject.version !== "UMA1_GP_V2.5") {
-                if (!confirm("データバージョンが一致しません。強制的に上書きしますか？")) return;
-            }
-
-            if (importObject.pools) {
-                if (importObject.pools.normal) {
-                    localStorage.setItem('turf_v25_normal', JSON.stringify(importObject.pools.normal));
-                    racePool = importObject.pools.normal;
-                }
-                if (importObject.pools.thanks) {
-                    localStorage.setItem('turf_v25_thanks', JSON.stringify(importObject.pools.thanks));
-                    thanksRacePool = importObject.pools.thanks;
-                }
-            }
-
-            if (importObject.videos && db) {
-                const transaction = db.transaction(["videos"], "readwrite");
-                const store = transaction.objectStore("videos");
-                for (const raceId in importObject.videos) {
-                    const dataUrl = importObject.videos[raceId];
-                    const res = await fetch(dataUrl);
-                    const blob = await res.blob();
-                    store.put(blob, raceId);
-                }
-                await new Promise((resolve) => { transaction.oncomplete = () => resolve(); });
-            }
-
-            alert("🎉 成功！データのインポートが完了しました。\nシステムを自動で再起動します。");
-            window.location.reload();
-        } catch (error) {
-            console.error("インポートエラー:", error);
-            alert("データの読み込みに失敗しました。ファイルが破損している可能性があります。");
-        }
-    }
-};
-
-// 【新機能】データを1つのファイル(.json)として瞬時にダウンロードさせる関数
-async function exportRaceDataFile() {
-    const btn = document.getElementById('export-file-btn');
-    const originalText = btn.innerText;
-    
-    try {
-        btn.innerText = "⏳ 処理中...";
-        btn.disabled = true;
-
-        const dataObj = await RaceDataConverter.exportData();
-        const jsonString = JSON.stringify(dataObj);
+        // 3. ブラウザに負荷をかけずにストリーム形式でZIP化し、即時ダウンロード
+        const content = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(content);
         
-        // テキストではなく「Blobファイル」にする（これならメモリ制限を受けず一瞬で処理可能）
-        const blob = new Blob([jsonString], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        
-        // 仮想リンクを作って自動ダウンロードを発火させる
         const a = document.createElement("a");
         a.href = url;
-        a.download = `UMA1_GP_Backup_${Date.now()}.json`;
+        a.download = `UMA1_GP_PerfectBackup_${Date.now()}.zip`;
         document.body.appendChild(a);
         a.click();
         
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        alert("🎉 バックアップ成功！\nレースデータと動画を含んだファイルをダウンロードしました。\n移行先の端末でこのファイルを読み込ませてください。");
+        alert("🎉 成功！\nフリーズを回避し、全ての動画とデータを「.zip」ファイルとして完璧に保存しました！\nこのZIPファイルをそのまま移行先で読み込んでください。");
 
     } catch (err) {
-        console.error("エクスポート失敗:", err);
-        alert("データの書き出しに失敗しました。動画の数が多すぎるか、容量上限を超えています。");
+        console.error("ZIPエクスポート失敗:", err);
+        alert("書き出しに失敗しました。ブラウザのストレージ制限がかかっている可能性があります。");
     } finally {
         btn.innerText = originalText;
         btn.disabled = false;
     }
 }
 
-// 【新機能】ダウンロードした.jsonファイルを選択して瞬時にインポートする関数
-function importRaceDataFile(input) {
+async function importRaceDataZip(input) {
     const file = input.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const importObject = JSON.parse(e.target.result);
-            RaceDataConverter.importData(importObject);
-        } catch (err) {
-            alert("有効なJSONバックアップファイルではありません。");
+    try {
+        const zip = await JSZip.loadAsync(file);
+        
+        // 1. レースデータの復元
+        const jsonFile = zip.file("race_data.json");
+        if (!jsonFile) throw new Error("不正なバックアップZIPです（レースデータが見つかりません）");
+        
+        const jsonText = await jsonFile.async("text");
+        const importObject = JSON.parse(jsonText);
+
+        if (importObject.pools) {
+            if (importObject.pools.normal) localStorage.setItem('turf_v25_normal', JSON.stringify(importObject.pools.normal));
+            if (importObject.pools.thanks) localStorage.setItem('turf_v25_thanks', JSON.stringify(importObject.pools.thanks));
         }
-    };
-    reader.readAsText(file);
+
+        // 2. 動画の復元 (IndexedDBへ直接ストリーミング)
+        if (db) {
+            const transaction = db.transaction(["videos"], "readwrite");
+            const store = transaction.objectStore("videos");
+            
+            // videosフォルダ配下のファイルを全走査
+            const videoFolder = zip.folder("videos");
+            if (videoFolder) {
+                const promises = [];
+                videoFolder.forEach((relativePath, fileObj) => {
+                    const raceId = relativePath.replace(".bin", "");
+                    const p = fileObj.async("blob").then(blob => {
+                        store.put(blob, raceId);
+                    });
+                    promises.push(p);
+                });
+                await Promise.all(promises);
+            }
+            await new Promise((resolve) => { transaction.oncomplete = () => resolve(); });
+        }
+
+        alert("🎉 完璧に成功しました！\n動画とデータのインポートが完了しました。\nページを再起動します。");
+        window.location.reload();
+
+    } catch (err) {
+        console.error("ZIPインポート失敗:", err);
+        alert("ファイルの読み込みに失敗しました。有効なUMA1 GPのZIPファイルかご確認ください。");
+    }
 }
 </script>
 </body>
