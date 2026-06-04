@@ -123,7 +123,7 @@
 
         <div style="margin-top:20px; padding:15px; border:1px dashed var(--gold); border-radius:8px; background:rgba(0,0,0,0.3);">
             <h3 style="margin:0 0 10px 0; font-size:14px; color:var(--gold);">📋 データのバックアップ / 移行</h3>
-            <button class="mini-btn" style="background:var(--accent); color:#000; width:100%; margin-bottom:5px;" onclick="exportRaceDataString()">データを文字列として出力</button>
+            <button class="mini-btn" style="background:var(--accent); color:#000; width:100%; margin-bottom:5px;" onclick="exportRaceDataString()">データを文字列として出力（クリップボードに保存）</button>
             <button class="mini-btn" style="background:var(--blue); width:100%;" onclick="importRaceDataString()">文字列からデータを読み込み</button>
         </div>
 
@@ -391,7 +391,7 @@ function renderMonitorUI() {
     const list = document.getElementById('mon-odds-list');
     if (list) {
         list.innerHTML = currentRace.horses.map(h => `
-            <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #222;">
+            <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #333; padding-top:10px;">
                 <span>${h.name}</span>
                 <span style="color:var(--gold); font-weight:bold;">x${(h.currentOdds || h.initialOdds).toFixed(2)}</span>
             </div>
@@ -491,7 +491,6 @@ function handleData(d, senderConn = null) {
             return;
         }
         if(d.type === 'REQ_COUNTDOWN') {
-            // カウントダウン開始時点ではまだbettingのまま（0秒でplayingにする）
             const t = Date.now() + 10500;
             broadcast({ type: 'COUNT_SYNC', t });
             startMonitorCountdown(t);
@@ -522,7 +521,6 @@ function handleData(d, senderConn = null) {
         }
     }
 
-    // 【新規受信追加】カウントダウン終了シグナルによる締め切り処理
     if(d.type === 'RACE_START_SIGNAL') {
         raceStatus = d.status;
         if(myRole === 'guest') {
@@ -538,7 +536,7 @@ function handleData(d, senderConn = null) {
     }
     if(d.type === 'RACE_SET') {
         currentRace = d.race; currentRaceNum = d.num; seriesTotal = d.total;
-        raceStatus = 'betting'; // レースセットされたら投票受付中に戻す
+        raceStatus = 'betting'; 
         if(d.tgMode !== undefined) applyThanksgivingVisual(d.tgMode);
         tempBets = {}; confirmedBets = {};
         document.getElementById('result-screen').style.display = 'none';
@@ -609,7 +607,6 @@ function startMonitorCountdown(targetTime) {
             clearInterval(timer); 
             o.style.display = 'none'; 
             
-            // 【修正】カウントダウン「0」の瞬間に締め切る
             if(myRole === 'monitor') {
                 raceStatus = 'playing';
                 broadcast({ type: 'RACE_START_SIGNAL', status: 'playing' });
@@ -669,7 +666,7 @@ function guestJoin() {
     } 
 }
 function changeBet(i, a) { 
-    if (raceStatus === 'playing') return; // 上映中は完全ブロック
+    if (raceStatus === 'playing') return; 
     if(myChips >= a) { myChips -= a; tempBets[i] = (tempBets[i]||0) + a; updateGuestChipsUI(); updateBetRow(i); } 
 }
 function cancelBet(i) { 
@@ -677,7 +674,7 @@ function cancelBet(i) {
     myChips += (tempBets[i] || 0); tempBets[i] = 0; updateGuestChipsUI(); updateBetRow(i); 
 }
 function confirmBet(i) {
-    if (raceStatus === 'playing') return; // 上映中は完全ブロック
+    if (raceStatus === 'playing') return; 
     const a = tempBets[i]||0; if(a <= 0) return;
     confirmedBets[i] = (confirmedBets[i]||0) + a;
     connToMonitor.send({ type: 'BET', idx: i, amount: a });
@@ -702,7 +699,6 @@ function renderGuestBetting() {
         </div>`).join('');
 }
 
-// 【新規追加】レース上映中の専用案内UI表示
 function renderGuestPlayingUI() {
     const bettingArea = document.getElementById('betting-area');
     if (!bettingArea) return;
@@ -754,10 +750,9 @@ function updateCtrlUI(state) {
     if(state === 'initial') document.getElementById('initialPickBtn').classList.remove('hidden');
 }
 
-// --- 【データ管理用関数群 群】 ---
+// --- 【データ管理用関数群】 ---
 function addHorseField() {
     const container = document.getElementById('horse-inputs');
-    const idx = container.children.length;
     const row = document.createElement('div');
     row.className = 'horse-input-row';
     row.innerHTML = `
@@ -883,10 +878,9 @@ function deleteRace(id) {
     updateRaceListUI();
 }
 
-// --- 【新規追加】RaceDataConverter (文字列変換・読込コアロジック) ---
+// --- RaceDataConverter (文字列変換・読込コアロジック) ---
 const RaceDataConverter = {
     exportData: async function() {
-        console.log("📦 レースデータのエクスポートを開始します...");
         const normalPool = JSON.parse(localStorage.getItem('turf_v25_normal') || '[]');
         const thanksPool = JSON.parse(localStorage.getItem('turf_v25_thanks') || '[]');
         const videoDataMap = {};
@@ -928,7 +922,6 @@ const RaceDataConverter = {
 
     importData: async function(base64String) {
         try {
-            console.log("📥 レースデータのインポートを開始します...");
             if (!base64String) return alert("文字列が空です");
 
             const jsonString = decodeURIComponent(escape(atob(base64String)));
@@ -964,19 +957,50 @@ const RaceDataConverter = {
             alert("データのインポートが成功しました。システムを再起動します。");
             window.location.reload();
         } catch (error) {
-            console.error("❌ インポートエラー:", error);
+            console.error("インポートエラー:", error);
             alert("データの読み込みに失敗しました。文字列が正しいか確認してください。");
         }
     }
 };
 
+// 【修正】エクスポートボタン押下時に、確実にクリップボードへ保存する関数
 async function exportRaceDataString() {
     try {
+        // 出力処理に少し時間がかかる場合があるため、一時的に通知
+        console.log("データを処理中...");
         const dataString = await RaceDataConverter.exportData();
-        await navigator.clipboard.writeText(dataString);
-        alert("統合レースデータ文字列（動画データ含む）をクリップボードにコピーしました！メモ帳などに貼り付けて保存してください。");
+        
+        // 巨大な文字列データを一時的に格納する textarea 要素を生成（裏側で処理）
+        const textArea = document.createElement("textarea");
+        textArea.value = dataString;
+        textArea.style.position = "fixed"; 
+        textArea.style.top = "0";
+        textArea.style.left = "0";
+        textArea.style.width = "2em";
+        textArea.style.height = "2em";
+        textArea.style.padding = "0";
+        textArea.style.border = "none";
+        textArea.style.outline = "none";
+        textArea.style.boxShadow = "none";
+        textArea.style.background = "transparent";
+        
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        textArea.setSelectionRange(0, 999999); // スマホ対応用
+
+        // 古いブラウザやクリップボードAPI制限下でも100%動くコピー処理を実行
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+
+        if (successful) {
+            alert("🎉 成功！\n全てのレースデータ（動画ファイル含む）をクリップボードに保存しました。\nメモ帳等に「貼り付け」をしてバックアップとして保存してください。");
+        } else {
+            throw new Error("execCommand copy failed");
+        }
     } catch (err) {
-        prompt("クリップボードへの自動コピーに失敗しました。以下の文字列をすべてトリプルクリック等で選択して手動コピーしてください：", await RaceDataConverter.exportData());
+        console.error("コピー失敗:", err);
+        alert("クリップボードへの自動保存に失敗しました。お手数ですが開発者コンソールを確認するか、別のブラウザでお試しください。");
     }
 }
 
