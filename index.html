@@ -607,7 +607,7 @@ async function playVideo() {
         await v.play(); 
     } catch(e) { 
         // ブラウザ制限対策（音声をミュートにして強制自動再生）
-        v.muted = true; 
+        v.muted = false; 
         await v.play(); 
     }
     
