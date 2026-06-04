@@ -122,9 +122,11 @@
         </div>
 
         <div style="margin-top:20px; padding:15px; border:1px dashed var(--gold); border-radius:8px; background:rgba(0,0,0,0.3);">
-            <h3 style="margin:0 0 10px 0; font-size:14px; color:var(--gold);">📋 データのバックアップ / 移行</h3>
-            <button id="export-btn" class="mini-btn" style="background:var(--accent); color:#000; width:100%; margin-bottom:5px; font-weight: bold;" onclick="exportRaceDataString()">データを文字列として出力（クリップボードに保存）</button>
-            <button class="mini-btn" style="background:var(--blue); width:100%;" onclick="importRaceDataString()">文字列からデータを読み込み</button>
+            <h3 style="margin:0 0 10px 0; font-size:14px; color:var(--gold);">📂 データのバックアップ / 移行</h3>
+            <button id="export-file-btn" class="mini-btn" style="background:var(--accent); color:#000; width:100%; margin-bottom:10px; font-weight: bold;" onclick="exportRaceDataFile()">データをファイル(.json)として書き出し保存</button>
+            
+            <label style="font-size:12px; color:#ccc; display:block; margin-bottom:5px;">バックアップファイルから読み込み：</label>
+            <input type="file" id="importFile" accept=".json" onchange="importRaceDataFile(this)" style="padding:5px; font-size:12px; background:#222;">
         </div>
 
         <button class="btn" onclick="showSection('setup-screen')" style="background:#333; margin-top:20px;">← 戻る</button>
@@ -878,7 +880,7 @@ function deleteRace(id) {
     updateRaceListUI();
 }
 
-// --- RaceDataConverter (文字列変換・読込コアロジック) ---
+// --- 改修版：RaceDataConverter (ファイル書き出し/読み込み対応) ---
 const RaceDataConverter = {
     exportData: async function() {
         const normalPool = JSON.parse(localStorage.getItem('turf_v25_normal') || '[]');
@@ -909,24 +911,16 @@ const RaceDataConverter = {
             });
         }
 
-        const exportObject = {
+        return {
             version: "UMA1_GP_V2.5",
             exportedAt: new Date().toISOString(),
             pools: { normal: normalPool, thanks: thanksPool },
             videos: videoDataMap
         };
-
-        const jsonString = JSON.stringify(exportObject);
-        return btoa(unescape(encodeURIComponent(jsonString)));
     },
 
-    importData: async function(base64String) {
+    importData: async function(importObject) {
         try {
-            if (!base64String) return alert("文字列が空です");
-
-            const jsonString = decodeURIComponent(escape(atob(base64String)));
-            const importObject = JSON.parse(jsonString);
-
             if (importObject.version !== "UMA1_GP_V2.5") {
                 if (!confirm("データバージョンが一致しません。強制的に上書きしますか？")) return;
             }
@@ -954,74 +948,67 @@ const RaceDataConverter = {
                 await new Promise((resolve) => { transaction.oncomplete = () => resolve(); });
             }
 
-            alert("データのインポートが成功しました。システムを再起動します。");
+            alert("🎉 成功！データのインポートが完了しました。\nシステムを自動で再起動します。");
             window.location.reload();
         } catch (error) {
             console.error("インポートエラー:", error);
-            alert("データの読み込みに失敗しました。文字列が正しいか確認してください。");
+            alert("データの読み込みに失敗しました。ファイルが破損している可能性があります。");
         }
     }
 };
 
-// 【強化修正】巨大データでも確実にクリップボードへ保存する関数
-async function exportRaceDataString() {
-    const btn = document.getElementById('export-btn');
+// 【新機能】データを1つのファイル(.json)として瞬時にダウンロードさせる関数
+async function exportRaceDataFile() {
+    const btn = document.getElementById('export-file-btn');
     const originalText = btn.innerText;
     
     try {
-        btn.innerText = "⏳ データ変換・保存中...";
-        btn.style.background = "#555";
+        btn.innerText = "⏳ 処理中...";
         btn.disabled = true;
 
-        const dataString = await RaceDataConverter.exportData();
+        const dataObj = await RaceDataConverter.exportData();
+        const jsonString = JSON.stringify(dataObj);
         
-        // 【重要】巨大テキスト対策：Blob（バイナリストリーム）としてクリップボードへ流し込む
-        const blob = new Blob([dataString], { type: "text/plain" });
-        const clipboardItem = new ClipboardItem({ "text/plain": blob });
+        // テキストではなく「Blobファイル」にする（これならメモリ制限を受けず一瞬で処理可能）
+        const blob = new Blob([jsonString], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
         
-        await navigator.clipboard.write([clipboardItem]);
+        // 仮想リンクを作って自動ダウンロードを発火させる
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `UMA1_GP_Backup_${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
         
-        alert("🎉 成功！\n全てのレースデータ（動画ファイル含む）をクリップボードに直接保存しました。\nメモ帳等に「貼り付け(Ctrl+V等)」をして、バックアップとして保存してください。");
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        alert("🎉 バックアップ成功！\nレースデータと動画を含んだファイルをダウンロードしました。\n移行先の端末でこのファイルを読み込ませてください。");
 
     } catch (err) {
-        console.error("Clipboard API 失敗、代替処理を試みます:", err);
-        
-        // 代替手段（iOS等の古いSafari対策、古い端末用）
-        try {
-            const dataString = await RaceDataConverter.exportData();
-            const textArea = document.createElement("textarea");
-            textArea.value = dataString;
-            Object.assign(textArea.style, {
-                position: "fixed", top: "0", left: "0", width: "2em", height: "2em",
-                padding: "0", border: "none", outline: "none", boxShadow: "none", background: "transparent"
-            });
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            textArea.setSelectionRange(0, 999999);
-            
-            const successful = document.execCommand('copy');
-            document.body.removeChild(textArea);
-            
-            if (successful) {
-                alert("🎉 成功（代替方式）！\nクリップボードにデータを保存しました。メモ帳等に貼り付けて保管してください。");
-                return;
-            }
-        } catch(e) { console.error(e); }
-
-        alert("❌ クリップボードへの保存に失敗しました。\n動画データが大きすぎるか、ブラウザの権限が拒否されています。\n（PCのGoogle Chromeや最新のEdgeブラウザでの実行を推奨します）");
+        console.error("エクスポート失敗:", err);
+        alert("データの書き出しに失敗しました。動画の数が多すぎるか、容量上限を超えています。");
     } finally {
         btn.innerText = originalText;
-        btn.style.background = "var(--accent)";
         btn.disabled = false;
     }
 }
 
-function importRaceDataString() {
-    const dataString = prompt("移行元から出力した、保存済みのレースデータ文字列（Base64形式）を貼り付けてください：");
-    if (dataString) {
-        RaceDataConverter.importData(dataString.trim());
-    }
+// 【新機能】ダウンロードした.jsonファイルを選択して瞬時にインポートする関数
+function importRaceDataFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const importObject = JSON.parse(e.target.result);
+            RaceDataConverter.importData(importObject);
+        } catch (err) {
+            alert("有効なJSONバックアップファイルではありません。");
+        }
+    };
+    reader.readAsText(file);
 }
 </script>
 </body>
