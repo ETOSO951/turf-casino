@@ -183,7 +183,9 @@ let isThanksgiving = false;
 let peer = null, connections = [], connToMonitor = null;
 let currentRace = null, myChips = 1000, currentRaceNum = 0, seriesTotal = 0;
 let tempBets = {}, confirmedBets = {}, guestBalances = {}, myRole = '';
-let isRaceActive = false; // 親機での投票受付状態フラグ
+
+// 【修正】単なるフラグから状態管理（'idle', 'betting', 'playing'）へ変更
+let raceStatus = 'idle'; 
 
 const STORAGE_KEY_NORMAL = 'turf_v25_normal';
 const STORAGE_KEY_THANKS = 'turf_v25_thanks';
@@ -443,7 +445,8 @@ function handleData(d, senderConn = null) {
                 
                 senderConn.send({ type: 'TG_MODE_SYNC', enabled: isThanksgiving });
                 
-                if(currentRace && isRaceActive) {
+                // 【修正】raceStatusがbettingのときのみアクティブにする
+                if(currentRace && raceStatus === 'betting') {
                     senderConn.send({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving, isActive: true });
                     senderConn.send({ type: 'UPDATE_STATE', horses: currentRace.horses, balances: guestBalances });
                 } else {
@@ -453,13 +456,13 @@ function handleData(d, senderConn = null) {
             return;
         }
         if(d.type === 'REQ_PICK') {
-            isRaceActive = true; 
+            raceStatus = 'betting'; // 【修正】ステータスを投票受付中に変更
             currentRaceNum++;
             const activePool = isThanksgiving ? thanksRacePool : racePool;
             if(activePool.length === 0) {
                 alert("選択されたモードのレースデータが空です。登録してください。");
                 currentRaceNum--;
-                isRaceActive = false;
+                raceStatus = 'idle';
                 return;
             }
             const pick = activePool[Math.floor(Math.random()*activePool.length)];
@@ -470,7 +473,8 @@ function handleData(d, senderConn = null) {
             return;
         }
         if(d.type === 'BET') {
-            if (!isRaceActive) return; 
+            // 【修正】投票受付中(betting)以外のステータスでは一切ベットを受け付けない
+            if (raceStatus !== 'betting') return; 
             if (senderConn && currentRace) {
                 const h = currentRace.horses[d.idx];
                 h.pool = (h.pool || 0) + d.amount;
@@ -483,7 +487,7 @@ function handleData(d, senderConn = null) {
             return;
         }
         if(d.type === 'REQ_COUNTDOWN') {
-            isRaceActive = false; 
+            raceStatus = 'playing'; // 【修正】カウントダウン開始(締め切り)時点でplaying状態にする
             const t = Date.now() + 10500;
             broadcast({ type: 'COUNT_SYNC', t });
             startMonitorCountdown(t);
@@ -504,7 +508,7 @@ function handleData(d, senderConn = null) {
             currentRaceNum = 0;
             guestBalances = {};
             currentRace = null;
-            isRaceActive = false;
+            raceStatus = 'idle'; // 【修正】状態をリセット
             broadcast({ type: 'RESET_STATE' });
             document.getElementById('result-screen').style.display = 'none';
             document.getElementById('mon-race-name').innerText = "READY";
@@ -603,12 +607,14 @@ async function playVideo() {
     v.src = url; 
     v.style.display = 'block';
     
+    // 【修正】音声を常に流すためミュート設定を解除
+    v.muted = false; 
+    
     try { 
         await v.play(); 
     } catch(e) { 
-        // ブラウザ制限対策（音声をミュートにして強制自動再生）
-        v.muted = false; 
-        await v.play(); 
+        // ケア用の自動ミュート処理を削除し、エラーログを残すのみに変更
+        console.error("動画の自動再生がブラウザにブロックされました:", e);
     }
     
     v.onended = () => { 
@@ -618,6 +624,7 @@ async function playVideo() {
 }
 
 function finalizeRace() {
+    raceStatus = 'idle'; // 【修正】配当確定・動画終了時にステータスを戻す
     const winner = currentRace.horses.find(h => parseInt(h.rank) === 1);
     const winnerName = winner ? winner.name : "なし";
     const payouts = Object.keys(guestBalances).map(pid => {
