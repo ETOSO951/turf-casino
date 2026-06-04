@@ -124,10 +124,13 @@
 
         <div style="margin-top:20px; padding:15px; border:1px dashed var(--gold); border-radius:8px; background:rgba(0,0,0,0.3);">
             <h3 style="margin:0 0 10px 0; font-size:14px; color:var(--gold);">📦 データ一括バックアップ / 復元</h3>
-            <button id="export-zip-btn" class="mini-btn" style="background:var(--accent); color:#000; width:100%; margin-bottom:10px; font-weight: bold;" onclick="exportRaceDataZip()">データを一括パッケージ（.zip）として保存</button>
             
-            <label style="font-size:12px; color:#ccc; display:block; margin-bottom:5px;">パッケージファイル（.zip）から丸ごと復元：</label>
-            <input type="file" id="importZipFile" accept=".zip" onchange="importRaceDataZip(this)" style="padding:5px; font-size:12px; background:#222; width:100%; box-sizing:border-box;">
+            <button id="export-zip-btn" class="mini-btn" style="background:var(--accent); color:#000; width:100%; margin-bottom:5px; font-weight: bold;" onclick="exportRaceDataZip()">A. 動画付きでZIPとして保存（推奨）</button>
+            <input type="file" id="importZipFile" accept=".zip" onchange="importRaceDataZip(this)" style="padding:5px; font-size:11px; background:#222; width:100%; box-sizing:border-box; margin-bottom:15px;">
+            
+            <span style="font-size:11px; color:#aaa; display:block; margin-bottom:5px;">⚠️ 上記のZIPがエラーになる場合はこちら：</span>
+            <button class="mini-btn" style="background:var(--blue); color:#fff; width:100%; margin-bottom:5px;" onclick="exportRaceDataJsonOnly()">B. レース設定のみを軽量保存（.json）</button>
+            <input type="file" id="importJsonFile" accept=".json" onchange="importRaceDataJsonOnly(this)" style="padding:5px; font-size:11px; background:#222; width:100%; box-sizing:border-box;">
         </div>
 
         <button class="btn" onclick="showSection('setup-screen')" style="background:#333; margin-top:20px;">← 戻る</button>
@@ -881,18 +884,17 @@ function deleteRace(id) {
     updateRaceListUI();
 }
 
-// --- 【修正版】ZIP圧縮形式の移行コアロジック ---
+// --- 【移行用関数群】 ---
+
+// 方法A: ZIPエクスポート (動画を含める)
 async function exportRaceDataZip() {
     const btn = document.getElementById('export-zip-btn');
     const originalText = btn.innerText;
-    
     try {
         btn.innerText = "⏳ パッケージ化中...";
         btn.disabled = true;
-
         const zip = new JSZip();
 
-        // 1. テキスト系の設定・プールデータをjsonファイルとして格納
         const textData = {
             version: "UMA1_GP_V2.5",
             exportedAt: new Date().toISOString(),
@@ -903,7 +905,6 @@ async function exportRaceDataZip() {
         };
         zip.file("race_data.json", JSON.stringify(textData));
 
-        // 2. IndexedDBから動画ファイルを「生のまま（Blob）」ZIP内に流し込む
         if (db) {
             await new Promise((resolve, reject) => {
                 const transaction = db.transaction(["videos"], "readonly");
@@ -924,37 +925,31 @@ async function exportRaceDataZip() {
 
         const content = await zip.generateAsync({ type: "blob" });
         const url = URL.createObjectURL(content);
-        
         const a = document.createElement("a");
         a.href = url;
         a.download = `UMA1_GP_PerfectBackup_${Date.now()}.zip`;
         document.body.appendChild(a);
         a.click();
-        
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        
-        alert("🎉 バックアップ成功！\n全てのデータ（動画未登録を含む）をZIP化しました。\nこのファイルを移行先で読み込んでください。");
-
+        alert("🎉 バックアップ成功！\n全てのデータをZIP化しました。");
     } catch (err) {
-        console.error("ZIPエクスポート失敗:", err);
-        alert("書き出しに失敗しました。");
+        console.error(err);
+        alert("ZIP作成に失敗しました。方法Bの軽量保存をお試しください。");
     } finally {
         btn.innerText = originalText;
         btn.disabled = false;
     }
 }
 
+// 方法A: ZIPインポート
 async function importRaceDataZip(input) {
     const file = input.files[0];
     if (!file) return;
-
     try {
         const zip = await JSZip.loadAsync(file);
-        
-        // 1. レースデータの復元
         const jsonFile = zip.file("race_data.json");
-        if (!jsonFile) throw new Error("不正なバックアップZIPです（レースデータが見つかりません）");
+        if (!jsonFile) throw new Error("データが見つかりません");
         
         const jsonText = await jsonFile.async("text");
         const importObject = JSON.parse(jsonText);
@@ -964,45 +959,82 @@ async function importRaceDataZip(input) {
             if (importObject.pools.thanks) localStorage.setItem('turf_v25_thanks', JSON.stringify(importObject.pools.thanks));
         }
 
-        // 2. 動画の復元 (バグ修正版)
         if (db) {
             const transaction = db.transaction(["videos"], "readwrite");
             const store = transaction.objectStore("videos");
             const promises = [];
 
-            // videos/ フォルダ配下を走査
-            zip.folder("videos").forEach((relativePath, fileObj) => {
-                // 【重要バグ修正】フォルダ自体を表す空データや不要ファイルを確実に弾く
-                if (fileObj.dir || !relativePath.endsWith('.bin')) return;
-
-                const raceId = relativePath.replace(".bin", "");
-                const p = fileObj.async("blob").then(blob => {
-                    // Blobのサイズが0以上の場合のみIndexedDBに保存
-                    if (blob.size > 0) {
-                        return new Promise((res, rej) => {
-                            const req = store.put(blob, raceId);
-                            req.onsuccess = () => res();
-                            req.onerror = () => rej();
-                        });
-                    }
+            const videoFolder = zip.folder("videos");
+            if (videoFolder) {
+                videoFolder.forEach((relativePath, fileObj) => {
+                    if (fileObj.dir || !relativePath.endsWith('.bin')) return;
+                    const raceId = relativePath.replace(".bin", "");
+                    const p = fileObj.async("blob").then(blob => {
+                        if (blob.size > 0) {
+                            return new Promise((res) => {
+                                const req = store.put(blob, raceId);
+                                req.onsuccess = () => res();
+                                req.onerror = () => res();
+                            });
+                        }
+                    });
+                    promises.push(p);
                 });
-                promises.push(p);
-            });
-
-            // すべての書き込み処理の終了を待つ
-            await Promise.all(promises);
-            await new Promise((resolve) => { 
-                transaction.oncomplete = () => resolve(); 
-            });
+                await Promise.all(promises);
+            }
+            await new Promise((resolve) => { transaction.oncomplete = () => resolve(); });
         }
-
-        alert("🎉 完璧に成功しました！\n動画とデータのインポートが完了しました。\nページをリロードします。");
+        alert("🎉 復元成功！再起動します。");
         window.location.reload();
-
     } catch (err) {
-        console.error("ZIPインポート失敗:", err);
-        alert("ファイルの読み込みに失敗しました。このコードで新しく保存し直したZIPファイルでお試しください。");
+        console.error(err);
+        alert("ファイルの読み込みに失敗しました。方法Bをお試しください。");
     }
+}
+
+// 方法B: JSONエクスポート (レース情報テキストのみ・100%安全)
+function exportRaceDataJsonOnly() {
+    const textData = {
+        version: "UMA1_GP_V2.5_TEXT_ONLY",
+        exportedAt: new Date().toISOString(),
+        pools: {
+            normal: JSON.parse(localStorage.getItem('turf_v25_normal') || '[]'),
+            thanks: JSON.parse(localStorage.getItem('turf_v25_thanks') || '[]')
+        }
+    };
+    const blob = new Blob([JSON.stringify(textData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `UMA1_GP_LightBackup_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    alert("🎉 軽量バックアップ成功！\nレース設定を「.json」として保存しました。");
+}
+
+// 方法B: JSONインポート
+function importRaceDataJsonOnly(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const importObject = JSON.parse(e.target.result);
+            if (importObject.pools) {
+                if (importObject.pools.normal) localStorage.setItem('turf_v25_normal', JSON.stringify(importObject.pools.normal));
+                if (importObject.pools.thanks) localStorage.setItem('turf_v25_thanks', JSON.stringify(importObject.pools.thanks));
+                alert("🎉 レース一覧の復元に成功しました！\n動画ファイルは未登録状態になりますので、必要に応じて各レースの「編集」から動画を再度追加してください。");
+                window.location.reload();
+            } else {
+                alert("不正なJSONファイルです。");
+            }
+        } catch (err) {
+            alert("読み込みエラーが発生しました。");
+        }
+    };
+    reader.readAsText(file);
 }
 </script>
 </body>
