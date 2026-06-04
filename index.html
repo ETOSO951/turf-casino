@@ -123,7 +123,7 @@
         </div>
 
         <div style="margin-top:20px; padding:15px; border:1px dashed var(--gold); border-radius:8px; background:rgba(0,0,0,0.3);">
-            <h3 style="margin:0 0 10px 0; font-size:14px; color:var(--gold);">📦 一瞬で完了する超高速バックアップ</h3>
+            <h3 style="margin:0 0 10px 0; font-size:14px; color:var(--gold);">📦 データ一括バックアップ / 復元</h3>
             <button id="export-zip-btn" class="mini-btn" style="background:var(--accent); color:#000; width:100%; margin-bottom:10px; font-weight: bold;" onclick="exportRaceDataZip()">データを一括パッケージ（.zip）として保存</button>
             
             <label style="font-size:12px; color:#ccc; display:block; margin-bottom:5px;">パッケージファイル（.zip）から丸ごと復元：</label>
@@ -468,7 +468,7 @@ function handleData(d, senderConn = null) {
             currentRaceNum++;
             const activePool = isThanksgiving ? thanksRacePool : racePool;
             if(activePool.length === 0) {
-                alert("選択されたモード of レースデータが空です。登録してください。");
+                alert("選択されたモードのレースデータが空です。登録してください。");
                 currentRaceNum--;
                 raceStatus = 'idle';
                 return;
@@ -881,18 +881,18 @@ function deleteRace(id) {
     updateRaceListUI();
 }
 
-// --- 【超高速・低メモリ】ZIP圧縮形式の移行コアロジック ---
+// --- 【修正版】ZIP圧縮形式の移行コアロジック ---
 async function exportRaceDataZip() {
     const btn = document.getElementById('export-zip-btn');
     const originalText = btn.innerText;
     
     try {
-        btn.innerText = "⏳ 超高速パッケージ化中...";
+        btn.innerText = "⏳ パッケージ化中...";
         btn.disabled = true;
 
         const zip = new JSZip();
 
-        // 1. テキスト系の設定・プールデータをまとめてjsonファイルとして格納
+        // 1. テキスト系の設定・プールデータをjsonファイルとして格納
         const textData = {
             version: "UMA1_GP_V2.5",
             exportedAt: new Date().toISOString(),
@@ -903,7 +903,7 @@ async function exportRaceDataZip() {
         };
         zip.file("race_data.json", JSON.stringify(textData));
 
-        // 2. IndexedDBから動画ファイルを「生のまま（Blob形式）」ZIP内に流し込む
+        // 2. IndexedDBから動画ファイルを「生のまま（Blob）」ZIP内に流し込む
         if (db) {
             await new Promise((resolve, reject) => {
                 const transaction = db.transaction(["videos"], "readonly");
@@ -912,7 +912,6 @@ async function exportRaceDataZip() {
                 request.onsuccess = function(e) {
                     const cursor = e.target.result;
                     if (cursor) {
-                        // 動画を一切テキストに変換せず、ファイル名「race_ID.mp4」としてそのままZIPへ追加
                         zip.file(`videos/${cursor.key}.bin`, cursor.value);
                         cursor.continue();
                     } else {
@@ -923,7 +922,6 @@ async function exportRaceDataZip() {
             });
         }
 
-        // 3. ブラウザに負荷をかけずにストリーム形式でZIP化し、即時ダウンロード
         const content = await zip.generateAsync({ type: "blob" });
         const url = URL.createObjectURL(content);
         
@@ -936,11 +934,11 @@ async function exportRaceDataZip() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        alert("🎉 成功！\nフリーズを回避し、全ての動画とデータを「.zip」ファイルとして完璧に保存しました！\nこのZIPファイルをそのまま移行先で読み込んでください。");
+        alert("🎉 バックアップ成功！\n全てのデータ（動画未登録を含む）をZIP化しました。\nこのファイルを移行先で読み込んでください。");
 
     } catch (err) {
         console.error("ZIPエクスポート失敗:", err);
-        alert("書き出しに失敗しました。ブラウザのストレージ制限がかかっている可能性があります。");
+        alert("書き出しに失敗しました。");
     } finally {
         btn.innerText = originalText;
         btn.disabled = false;
@@ -966,33 +964,44 @@ async function importRaceDataZip(input) {
             if (importObject.pools.thanks) localStorage.setItem('turf_v25_thanks', JSON.stringify(importObject.pools.thanks));
         }
 
-        // 2. 動画の復元 (IndexedDBへ直接ストリーミング)
+        // 2. 動画の復元 (バグ修正版)
         if (db) {
             const transaction = db.transaction(["videos"], "readwrite");
             const store = transaction.objectStore("videos");
-            
-            // videosフォルダ配下のファイルを全走査
-            const videoFolder = zip.folder("videos");
-            if (videoFolder) {
-                const promises = [];
-                videoFolder.forEach((relativePath, fileObj) => {
-                    const raceId = relativePath.replace(".bin", "");
-                    const p = fileObj.async("blob").then(blob => {
-                        store.put(blob, raceId);
-                    });
-                    promises.push(p);
+            const promises = [];
+
+            // videos/ フォルダ配下を走査
+            zip.folder("videos").forEach((relativePath, fileObj) => {
+                // 【重要バグ修正】フォルダ自体を表す空データや不要ファイルを確実に弾く
+                if (fileObj.dir || !relativePath.endsWith('.bin')) return;
+
+                const raceId = relativePath.replace(".bin", "");
+                const p = fileObj.async("blob").then(blob => {
+                    // Blobのサイズが0以上の場合のみIndexedDBに保存
+                    if (blob.size > 0) {
+                        return new Promise((res, rej) => {
+                            const req = store.put(blob, raceId);
+                            req.onsuccess = () => res();
+                            req.onerror = () => rej();
+                        });
+                    }
                 });
-                await Promise.all(promises);
-            }
-            await new Promise((resolve) => { transaction.oncomplete = () => resolve(); });
+                promises.push(p);
+            });
+
+            // すべての書き込み処理の終了を待つ
+            await Promise.all(promises);
+            await new Promise((resolve) => { 
+                transaction.oncomplete = () => resolve(); 
+            });
         }
 
-        alert("🎉 完璧に成功しました！\n動画とデータのインポートが完了しました。\nページを再起動します。");
+        alert("🎉 完璧に成功しました！\n動画とデータのインポートが完了しました。\nページをリロードします。");
         window.location.reload();
 
     } catch (err) {
         console.error("ZIPインポート失敗:", err);
-        alert("ファイルの読み込みに失敗しました。有効なUMA1 GPのZIPファイルかご確認ください。");
+        alert("ファイルの読み込みに失敗しました。このコードで新しく保存し直したZIPファイルでお試しください。");
     }
 }
 </script>
