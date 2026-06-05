@@ -46,8 +46,8 @@
 
         .history-panel { background: rgba(255,255,255,0.05); border: 1px solid #444; border-radius: 8px; padding: 10px; margin-bottom: 15px; font-size: 13px; }
         .history-title { font-weight: bold; color: var(--gold); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .history-rank-item { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #333; font-size: 12px; }
         
-        /* ベットボタン群のレイアウト調整（横並びで均等バランス） */
         .bet-buttons-group { display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: 4px; width: 100%; margin-top: 5px; }
         .bet-buttons-group .mini-btn { margin: 0; padding: 12px 5px; text-align: center; width: 100%; box-sizing: border-box; }
 
@@ -143,20 +143,29 @@
         <button class="btn" onclick="showSection('setup-screen')" style="background:#333; margin-top:20px;">← 戻る</button>
     </div>
 
+    <!-- 操作パネル画面 -->
     <div id="controller-screen" class="section hidden board">
         <div class="tg-badge">🍁 感謝祭モード適用中 🍁</div>
         
+        <!-- 前回レース集計・キャリーオーバー表示エリア -->
         <div class="history-panel">
             <div class="history-title" onclick="toggleHistoryDetails()">
-                <span>📊 前回シリーズの最終結果（確認）</span>
+                <span>📊 前回シリーズの最終結果とランキング</span>
                 <span id="history-toggle-icon">▼</span>
             </div>
             <div id="history-details" style="margin-top: 10px; border-top: 1px dashed #555; padding-top: 8px;">
-                <div>全プレイヤー合計: <b id="hist-total-chips" style="color:var(--gold);">0</b> Chips</div>
-                <div style="font-size: 15px; margin: 4px 0; font-weight: bold; color:var(--accent);">
-                    5000割（整数部分）: <span id="hist-divided-val">0</span>
+                <div style="margin-bottom: 8px; border-bottom: 1px solid #444; padding-bottom: 8px;">
+                    <div>全プレイヤー合計: <b id="hist-total-chips" style="color:var(--gold);">0</b> Chips</div>
+                    <div style="font-size: 15px; margin: 4px 0; font-weight: bold; color:var(--accent);">
+                        5000割（整数部分）: <span id="hist-divided-val">0</span>
+                    </div>
+                    <div style="color: #bbb; font-size:11px;">積み上げキャリーオーバー（端数）: <span id="hist-carry-over">0</span> Chips</div>
                 </div>
-                <div style="color: #bbb;">積み上げキャリーオーバー（端数）: <span id="hist-carry-over">0</span> Chips</div>
+                <!-- プレイヤーランキング表示用コンテナ -->
+                <div style="font-weight: bold; color: var(--blue); margin-bottom: 4px; font-size:12px;">🏆 最終プレイヤー順位:</div>
+                <div id="history-ranking-container" style="max-height: 150px; overflow-y: auto;">
+                    <div style="color:#aaa; font-size:11px; text-align:center; padding:5px;">データがありません</div>
+                </div>
             </div>
         </div>
 
@@ -220,7 +229,7 @@ let tempBets = {}, confirmedBets = {}, guestBalances = {}, myRole = '';
 let raceStatus = 'idle'; 
 
 // 前回データ管理オブジェクト (初期値)
-let previousRaceStats = { total: 0, divided: 0, carryOver: 0 };
+let previousRaceStats = { total: 0, divided: 0, carryOver: 0, ranking: [] };
 
 const STORAGE_KEY_NORMAL = 'turf_v25_normal';
 const STORAGE_KEY_THANKS = 'turf_v25_thanks';
@@ -316,10 +325,26 @@ function updateHistoryUI() {
     document.getElementById('hist-total-chips').innerText = previousRaceStats.total.toLocaleString();
     document.getElementById('hist-divided-val').innerText = previousRaceStats.divided.toLocaleString();
     document.getElementById('hist-carry-over').innerText = previousRaceStats.carryOver.toLocaleString();
+    
+    // 操作パネル用の履歴内ランキング生成
+    const rankContainer = document.getElementById('history-ranking-container');
+    if (rankContainer) {
+        const ranking = previousRaceStats.ranking || [];
+        if (ranking.length === 0) {
+            rankContainer.innerHTML = '<div style="color:#aaa; font-size:11px; text-align:center; padding:5px;">データがありません</div>';
+        } else {
+            rankContainer.innerHTML = ranking.map((p, idx) => `
+                <div class="history-rank-item">
+                    <span><b>${idx + 1}位</b> ${p.name}</span>
+                    <span style="color:var(--accent); font-weight:bold;">${p.chips.toLocaleString()}玉</span>
+                </div>
+            `).join('');
+        }
+    }
 }
 
 function requestSystemReset() { 
-    if (confirm("本当に最初からやり直しますか？\n(全プレイヤーのポイントがリセットされ、残りの端数は次々回へ累積キャリーオーバーされます)")) {
+    if (confirm("本当に最初からやり直しますか？\n(全プレイヤーのポイントがリセットされ、ランキングが操作パネルに保存されます)")) {
         if (connToMonitor) connToMonitor.send({ type: 'REQ_RESET' }); 
     }
 }
@@ -353,6 +378,7 @@ function getPresets() {
     const data = localStorage.getItem(PRESET_KEY);
     return data ? JSON.parse(data) : [];
 }
+// プリセット保存ロジック
 function saveNewPreset() {
     const name = prompt('このプリセットに名前をつけてください:');
     if(!name) return;
@@ -569,22 +595,26 @@ function handleData(d, senderConn = null) {
             return;
         }
         if(d.type === 'REQ_RESET') {
-            // 今回の全プレイヤー合計ポイントを算出
             let currentPoolTotal = 0;
+            const rankArray = Object.values(guestBalances).sort((a,b) => b.chips - a.chips);
+            
             Object.values(guestBalances).forEach(p => {
                 currentPoolTotal += (p.chips || 0);
             });
 
-            // 過去の繰り越し端数(キャリーオーバー)をここで加算して積み上げる
             let finalCombinedPool = currentPoolTotal + (previousRaceStats.carryOver || 0);
 
-            // 累積値から5000割りと、新たなキャリーオーバーを計算
             const divided = Math.floor(finalCombinedPool / 5000);
             const carryOver = finalCombinedPool % 5000;
 
-            const stats = { total: finalCombinedPool, divided, carryOver };
+            // 算出した戦績データにプレイヤーランキングの簡易スナップショットを含める
+            const stats = { 
+                total: finalCombinedPool, 
+                divided, 
+                carryOver,
+                ranking: rankArray.map(p => ({ name: p.name, chips: p.chips }))
+            };
 
-            // 全機に状態保存命令を送る
             broadcast({ type: 'SAVE_STATS', stats });
             localStorage.setItem(STATS_KEY, JSON.stringify(stats));
 
@@ -726,7 +756,7 @@ async function playVideo() {
     try { 
         await v.play(); 
     } catch(e) { 
-        console.error("動画の自動再生がブラウザにブロックされました:", e);
+        console.error("Video element playback blocked:", e);
     }
     
     v.onended = () => { 
@@ -1086,7 +1116,7 @@ function importRaceDataZip(input) {
         alert("ZIPからの復元が完了しました！ページを一度リロードして確認してください。");
         location.reload();
     }).catch(err => {
-        alert("復元中にエラーが発生しました。ファイルが破損しているか、容量制限を超過している可能性があります。\n" + err);
+        alert("復元中にエラーが発生しました。容量制限等によるエラーの可能性があります。\n" + err);
     });
 }
 
