@@ -725,18 +725,40 @@ function handleData(d, senderConn = null) {
     }
 }
 
+// 【修正箇所】startMonitorCountdown 関数を以下のように書き換えます
 function startMonitorCountdown(targetTime) {
-    const o = document.getElementById('countdown-overlay'); o.style.display = 'block';
+    const o = document.getElementById('countdown-overlay'); 
+    o.style.display = 'block';
+    
     const timer = setInterval(() => {
         const rem = Math.ceil((targetTime - Date.now()) / 1000);
         if(rem <= 0) { 
             clearInterval(timer); 
-            o.style.display = 'none'; 
             
             if(myRole === 'monitor') {
                 raceStatus = 'playing';
                 broadcast({ type: 'RACE_START_SIGNAL', status: 'playing' });
-                playVideo(); 
+                
+                // --- 変更点: 自動再生せず、手動再生ボタンを表示する ---
+                o.innerHTML = `
+                    <div style="text-align:center; padding:20px;">
+                        <p style="font-size:24px; margin-bottom:15px; color:var(--gold);">動画の準備が完了しました</p>
+                        <button id="manual-play-btn" class="mini-btn" style="font-size:20px; padding:15px 30px; background:var(--accent); color:#000; font-weight:bold; cursor:pointer; border-radius:8px;">
+                            ▶ レース開始（動画再生）
+                        </button>
+                    </div>
+                `;
+                
+                // ボタンが押されたらオーバーレイを消して動画を再生
+                document.getElementById('manual-play-btn').onclick = () => {
+                    o.style.display = 'none'; 
+                    o.innerHTML = ''; // 中身をクリア
+                    playVideo(); 
+                };
+                // ----------------------------------------------------
+            } else {
+                // ゲストやコントローラー側はボタン不要なのでそのまま閉じる
+                o.style.display = 'none'; 
             }
         }
         else o.innerText = rem;
