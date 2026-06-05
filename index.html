@@ -747,26 +747,73 @@ function startMonitorCountdown(targetTime) {
     }, 100);
 }
 
-async function playVideo() {
+// 動画を停止状態で準備し、全画面透明ボタンを表示する関数
+function prepareVideoAndShowOverlay() {
     const v = document.getElementById('mainVideo'); 
     const url = videoMap.get(currentRace.id); 
     
+    // 動画URLがない場合は即座にリザルト処理へ
     if(!url) return finalizeRace();
     
+    // 動画の初期設定
     v.src = url; 
     v.style.display = 'block';
     v.muted = false; 
+    v.pause();          // 確実に一時停止状態にする
+    v.currentTime = 0;   // 動画を先頭に戻して待機
+
+    // 重複防止：古いボタンが残っていれば事前に削除
+    const oldBtn = document.getElementById('manual-play-overlay');
+    if (oldBtn) oldBtn.remove();
+
+    // 透明な全画面ボタン（オーバーレイ）を動的に作成
+    const playBtn = document.createElement('div');
+    playBtn.id = 'manual-play-overlay';
     
+    // 画面全体を完全に覆うスタイル
+    Object.assign(playBtn.style, {
+        position: 'fixed',
+        top: '0',
+        left: '0',
+        width: '100vw',
+        height: '100vh',
+        zIndex: '99999',         // 他の要素よりも確実に手前に配置
+        background: 'rgba(0, 0, 0, 0)', // 完全透明（見た目には何も見えない）
+        cursor: 'pointer'
+    });
+
+    // 画面のどこかがクリックされた時の処理
+    playBtn.onclick = async () => {
+        playBtn.remove(); // クリックされたら即座に透明ボタンを削除
+        
+        try { 
+            await v.play(); // ユーザー操作をトリガーにして動画を再生
+        } catch(e) { 
+            console.error("動画の再生に失敗しました:", e);
+            finalizeRace(); // 再生失敗時は停止させずに終了処理へ逃がす
+        }
+    };
+
+    // 動画が最後まで再生し終わった時のイベント設定
+    v.onended = () => { 
+        v.style.display = 'none'; 
+        finalizeRace(); 
+    };
+
+    // 生成した透明ボタンを画面（body）に追加
+    document.body.appendChild(playBtn);
+}
+
+// 互換性維持のためのplayVideo関数
+async function playVideo() {
+    // 新方式（prepareVideoAndShowOverlay）に移行したため、
+    // 万が一他の処理からこの関数が直接呼ばれた場合のみ、そのまま再生を試みます。
+    const v = document.getElementById('mainVideo');
     try { 
         await v.play(); 
     } catch(e) { 
         console.error("Video element playback blocked:", e);
     }
-    
-    v.onended = () => { 
-        v.style.display = 'none'; 
-        finalizeRace(); 
-    };
 }
 
 function finalizeRace() {
