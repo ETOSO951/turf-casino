@@ -200,7 +200,7 @@
 
     <div id="guest-join-screen" class="section hidden board">
         <div class="tg-badge">🍁 感謝祭受付中 🍁</div>
-        <h3 style="text-align:center;">運営用タブレット 参加登録</h3>
+        <h3 style="text-align:center;">参加登録</h3>
         <input type="text" id="playerName" placeholder="名前を入力">
         <button class="btn" onclick="guestJoin()">参加</button>
     </div>
@@ -795,7 +795,7 @@ function showVisualResult(data) {
         const rList = document.getElementById('final-rank-list');
         const rankData = data.rank || [];
         rList.innerHTML = rankData.map((p, i) => `
-            <div>${i+1}位: ${p.name} (${p.chips}玉)</div>
+            <div>${i+1}位: ${p.name} (${p.chips}チップ)</div>
         `).join('');
     } else {
         document.getElementById('res-final-part').classList.add('hidden');
@@ -856,8 +856,8 @@ function renderGuestBetting() {
                     <div class="bet-buttons-group">
                         <button class="mini-btn" style="background:#444;" onclick="changeBet(${i}, 10)">+10</button>
                         <button class="mini-btn" style="background:#555;" onclick="changeBet(${i}, 100)">+100</button>
-                        <button class="mini-btn" style="background:var(--red);" onclick="cancelBet(${i})">消</button>
-                        <button class="mini-btn" style="background:var(--accent); color:#000;" onclick="confirmBet(${i})">かける</button>
+                        <button class="mini-btn" style="background:var(--red);" onclick="cancelBet(${i})">取り消し</button>
+                        <button class="mini-btn" style="background:var(--accent); color:#000;" onclick="confirmBet(${i})">BET</button>
                     </div>
                 </div>
             `).join('')}
