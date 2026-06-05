@@ -183,10 +183,9 @@
         <div id="betting-area">（レース抽選待ちです...）</div>
     </div>
 </div>
-<div id="op-panel-stats"></div>
+
 <video id="mainVideo" playsinline style="position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:9999; display:none;"></video>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 let racePool = [], thanksRacePool = [];
 let videoMap = new Map(); 
@@ -202,11 +201,6 @@ const STORAGE_KEY_NORMAL = 'turf_v25_normal';
 const STORAGE_KEY_THANKS = 'turf_v25_thanks';
 const PRESET_KEY = 'turf_presets';
 const DEFAULT_PRESET_KEY = 'turf_default_preset';
-
-// --- 歴代ランキング＆統計用ストレージキー ---
-const STORAGE_KEY_HISTORY = 'turf_history_rank';
-const STORAGE_KEY_LAST_TOTAL = 'turf_last_total';
-const THANKSGIVING_THRESHOLD = 50000;
 
 // --- IndexedDBの初期化と動画復元ロジック ---
 let db = null;
@@ -248,7 +242,6 @@ window.onload = () => {
     updateRaceListUI();
     updatePresetList();
     loadDefaultPreset();
-    updateControlPanelUI(); // 初回表示
 };
 
 function broadcast(data) {
@@ -514,7 +507,6 @@ function handleData(d, senderConn = null) {
                 const rank = Object.values(guestBalances).sort((a,b)=>b.chips-a.chips);
                 broadcast({ type: 'SHOW_RANKING', rank });
                 showRankingUI(rank);
-                saveSeriesToHistory(rank); // 新設：履歴保存
             } else {
                 broadcast({ type: 'CLOSE_UI' });
                 document.getElementById('result-screen').style.display = 'none';
@@ -611,9 +603,6 @@ function handleData(d, senderConn = null) {
             showSection('guest-join-screen');
         }
     }
-    if(d.type === 'SYNC_OP_PANEL') {
-        updateControlPanelUI();
-    }
 }
 
 function startMonitorCountdown(targetTime) {
@@ -699,7 +688,7 @@ function confirmBet(i) {
 }
 function updateBetRow(i) { document.getElementById(`g-status-${i}`).innerText = `確定:${confirmedBets[i]||0} / 準備:${tempBets[i]||0}`; }
 function updateGuestChipsUI() { document.getElementById('my-chips').innerText = myChips; }
-function updateGuestOddsUI()){ if(currentRace) currentRace.horses.forEach((h,i) => { const el=document.getElementById(`g-odd-${i}`); if(el) el.innerText='x'+h.currentOdds.toFixed(2); }); }
+function updateGuestOddsUI(){ if(currentRace) currentRace.horses.forEach((h,i) => { const el=document.getElementById(`g-odd-${i}`); if(el) el.innerText='x'+h.currentOdds.toFixed(2); }); }
 
 function renderGuestBetting() {
     if(!currentRace) return;
@@ -765,78 +754,6 @@ function updateCtrlUI(state) {
     if(state === 'final-action') document.getElementById('ctrl-final-action').classList.remove('hidden');
     if(state === 'next-action') document.getElementById('ctrl-next-action').classList.remove('hidden');
     if(state === 'initial') document.getElementById('initialPickBtn').classList.remove('hidden');
-}
-
-// --- 【統計データの集計保存およびUI更新】 ---
-function saveSeriesToHistory(currentRank) {
-    let currentTotal = 0;
-    currentRank.forEach(p => { currentTotal += p.chips; });
-
-    // 前回の結果を退避させて上書き
-    localStorage.setItem(STORAGE_KEY_LAST_TOTAL, currentTotal);
-
-    let history = [];
-    const savedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
-    if(savedHistory) history = JSON.parse(savedHistory);
-
-    currentRank.forEach(player => {
-        const existIndex = history.findIndex(h => h.name === player.name);
-        if(existIndex >= 0) {
-            if(player.chips > history[existIndex].chips) {
-                history[existIndex].chips = player.chips;
-            }
-        } else {
-            history.push({ name: player.name, chips: player.chips });
-        }
-    });
-
-    history.sort((a, b) => b.chips - a.chips);
-    localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(history));
-
-    updateControlPanelUI();
-    broadcast({ type: 'SYNC_OP_PANEL' });
-}
-
-function updateControlPanelUI() {
-    const historyData = localStorage.getItem(STORAGE_KEY_HISTORY);
-    const historyList = historyData ? JSON.parse(historyData) : [];
-    const lastTotal = parseInt(localStorage.getItem(STORAGE_KEY_LAST_TOTAL)) || 0;
-    
-    let totalAllPoints = 0;
-    historyList.forEach(h => { totalAllPoints += h.chips; });
-
-    const ratio = ((totalAllPoints / THANKSGIVING_THRESHOLD) * 100).toFixed(1);
-
-    const container = document.getElementById('op-panel-stats');
-    if (container) {
-        container.innerHTML = `
-            <div class="board" style="padding:15px; margin-bottom:15px; background: rgba(255,255,255,0.05); border: 1px solid #444;">
-                <h3 style="margin-top:0; color:var(--gold); font-size:16px;">📊 感謝祭統計・歴代ランキング</h3>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px; font-size:13px;">
-                    <div>🪙 総獲得ポイント: <b style="color:var(--accent); font-size:16px;">${totalAllPoints}</b></div>
-                    <div>⏮️ 前回総獲得pt: <b style="color:#fff;">${lastTotal}</b></div>
-                </div>
-                <div style="margin-bottom:15px; font-size:13px;">
-                    <div>🔥 感謝祭目安 (${ratio}%):</div>
-                    <div style="background:#222; border-radius:4px; height:12px; width:100%; margin-top:4px; overflow:hidden;">
-                        <div style="background:linear-gradient(90deg, #ff9f43, #ff4757); height:100%; width:${Math.min(ratio, 100)}%;"></div>
-                    </div>
-                </div>
-                <div style="font-size:12px;">
-                    <div style="font-weight:bold; color:#aaa; border-bottom:1px solid #444; padding-bottom:3px; margin-bottom:5px;">🏆 歴代プレイヤーランキング</div>
-                    <div style="max-height:150px; overflow-y:auto; padding-right:5px;">
-                        ${historyList.map((p, i) => `
-                            <div style="display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid #222;">
-                                <span>${i + 1}. ${p.name}</span>
-                                <span style="color:var(--gold); font-weight:bold;">${p.chips} 🪙</span>
-                            </div>
-                        `).join('') || '<div style="color:#666; text-align:center;">データがありません</div>'}
-                    </div>
-                </div>
-                <button class="mini-btn" style="background:var(--red); width:100%; margin-top:10px; padding:4px;" onclick="if(confirm('歴代ランキングと統計データを完全に初期化しますか？')){localStorage.removeItem('turf_history_rank');localStorage.removeItem('turf_last_total');updateControlPanelUI();}">統計リセット</button>
-            </div>
-        `;
-    }
 }
 
 // --- 【データ管理用関数群】 ---
@@ -968,6 +885,8 @@ function deleteRace(id) {
 }
 
 // --- 【移行用関数群】 ---
+
+// 方法A: ZIPエクスポート (動画を含める)
 async function exportRaceDataZip() {
     const btn = document.getElementById('export-zip-btn');
     const originalText = btn.innerText;
@@ -1016,13 +935,14 @@ async function exportRaceDataZip() {
         alert("🎉 バックアップ成功！\n全てのデータをZIP化しました。");
     } catch (err) {
         console.error(err);
-        alert("ZIP作成に失敗しました。");
+        alert("ZIP作成に失敗しました。方法Bの軽量保存をお試しください。");
     } finally {
         btn.innerText = originalText;
         btn.disabled = false;
     }
 }
 
+// 方法A: ZIPインポート
 async function importRaceDataZip(input) {
     const file = input.files[0];
     if (!file) return;
@@ -1035,21 +955,86 @@ async function importRaceDataZip(input) {
         const importObject = JSON.parse(jsonText);
 
         if (importObject.pools) {
-            if (importObject.pools.normal) {
-                localStorage.setItem('turf_v25_normal', JSON.stringify(importObject.pools.normal));
-                racePool = importObject.pools.normal;
-            }
-            if (importObject.pools.thanks) {
-                localStorage.setItem('turf_v25_thanks', JSON.stringify(importObject.pools.thanks));
-                thanksRacePool = importObject.pools.thanks;
-            }
-            updateRaceListUI();
+            if (importObject.pools.normal) localStorage.setItem('turf_v25_normal', JSON.stringify(importObject.pools.normal));
+            if (importObject.pools.thanks) localStorage.setItem('turf_v25_thanks', JSON.stringify(importObject.pools.thanks));
         }
-        alert("インポートが完了しました。");
+
+        if (db) {
+            const transaction = db.transaction(["videos"], "readwrite");
+            const store = transaction.objectStore("videos");
+            const promises = [];
+
+            const videoFolder = zip.folder("videos");
+            if (videoFolder) {
+                videoFolder.forEach((relativePath, fileObj) => {
+                    if (fileObj.dir || !relativePath.endsWith('.bin')) return;
+                    const raceId = relativePath.replace(".bin", "");
+                    const p = fileObj.async("blob").then(blob => {
+                        if (blob.size > 0) {
+                            return new Promise((res) => {
+                                const req = store.put(blob, raceId);
+                                req.onsuccess = () => res();
+                                req.onerror = () => res();
+                            });
+                        }
+                    });
+                    promises.push(p);
+                });
+                await Promise.all(promises);
+            }
+            await new Promise((resolve) => { transaction.oncomplete = () => resolve(); });
+        }
+        alert("🎉 復元成功！再起動します。");
+        window.location.reload();
     } catch (err) {
         console.error(err);
-        alert("インポートに失敗しました。");
+        alert("ファイルの読み込みに失敗しました。方法Bをお試しください。");
     }
+}
+
+// 方法B: JSONエクスポート (レース情報テキストのみ・100%安全)
+function exportRaceDataJsonOnly() {
+    const textData = {
+        version: "UMA1_GP_V2.5_TEXT_ONLY",
+        exportedAt: new Date().toISOString(),
+        pools: {
+            normal: JSON.parse(localStorage.getItem('turf_v25_normal') || '[]'),
+            thanks: JSON.parse(localStorage.getItem('turf_v25_thanks') || '[]')
+        }
+    };
+    const blob = new Blob([JSON.stringify(textData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `UMA1_GP_LightBackup_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    alert("🎉 軽量バックアップ成功！\nレース設定を「.json」として保存しました。");
+}
+
+// 方法B: JSONインポート
+function importRaceDataJsonOnly(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const importObject = JSON.parse(e.target.result);
+            if (importObject.pools) {
+                if (importObject.pools.normal) localStorage.setItem('turf_v25_normal', JSON.stringify(importObject.pools.normal));
+                if (importObject.pools.thanks) localStorage.setItem('turf_v25_thanks', JSON.stringify(importObject.pools.thanks));
+                alert("🎉 レース一覧の復元に成功しました！\n動画ファイルは未登録状態になりますので、必要に応じて各レースの「編集」から動画を再度追加してください。");
+                window.location.reload();
+            } else {
+                alert("不正なJSONファイルです。");
+            }
+        } catch (err) {
+            alert("読み込みエラーが発生しました。");
+        }
+    };
+    reader.readAsText(file);
 }
 </script>
 </body>
