@@ -202,6 +202,17 @@ const STORAGE_KEY_THANKS = 'turf_v25_thanks';
 const PRESET_KEY = 'turf_presets';
 const DEFAULT_PRESET_KEY = 'turf_default_preset';
 
+// --- 追加: 統計・歴代データ管理用キーと初期設定 ---
+const STORAGE_KEY_STATS = 'turf_v25_stats';
+const STORAGE_KEY_HISTORICAL = 'turf_v25_historical_ranking';
+const TG_TARGET_POINTS = 50000;
+
+let statsData = {
+    totalPoints: 0, // これまでの全プレイヤーの総獲得ポイント
+    lastRacePoints: 0 // 前回の全プレイヤーの総獲得ポイント
+};
+let historicalRanking = []; // 歴代プレイヤーのランキング [{name: string, chips: number}]
+
 // --- IndexedDBの初期化と動画復元ロジック ---
 let db = null;
 const dbRequest = indexedDB.open("TurfVideoDB", 1);
@@ -239,9 +250,16 @@ window.onload = () => {
     const savedThanks = localStorage.getItem(STORAGE_KEY_THANKS);
     if(savedThanks) thanksRacePool = JSON.parse(savedThanks);
 
+    // 統計データと歴代ランキングの読み込み
+    const savedStats = localStorage.getItem(STORAGE_KEY_STATS);
+    if(savedStats) statsData = JSON.parse(savedStats);
+    const savedHistorical = localStorage.getItem(STORAGE_KEY_HISTORICAL);
+    if(savedHistorical) historicalRanking = JSON.parse(savedHistorical);
+
     updateRaceListUI();
     updatePresetList();
     loadDefaultPreset();
+    updateControlPanelStatsUI(); // 操作パネルの統計表示を更新
 };
 
 function broadcast(data) {
@@ -401,7 +419,7 @@ function renderMonitorUI() {
                 <span>${h.name}</span>
                 <span style="color:var(--gold); font-weight:bold;">x${(h.currentOdds || h.initialOdds).toFixed(2)}</span>
             </div>
-        `).join('');
+         `).join('');
     }
 }
 
@@ -649,6 +667,9 @@ function finalizeRace() {
     raceStatus = 'idle'; 
     const winner = currentRace.horses.find(h => parseInt(h.rank) === 1);
     const winnerName = winner ? winner.name : "なし";
+    
+    let thisRaceTotalPayout = 0; // 今回の全プレイヤーの総獲得ポイント計算用
+
     const payouts = Object.keys(guestBalances).map(pid => {
         let win = 0;
         if (winner && currentRace.horses[currentRace.horses.indexOf(winner)].bets) {
@@ -656,8 +677,20 @@ function finalizeRace() {
             win = Math.floor(betAmount * winner.currentOdds);
         }
         guestBalances[pid].chips += win;
+        thisRaceTotalPayout += win; // 今回の獲得分に加算
+
+        // 歴代プレイヤーデータの更新・保存
+        updateHistoricalData(guestBalances[pid].name, guestBalances[pid].chips);
+
         return { name: guestBalances[pid].name, win };
     });
+
+    // --- 追加: 統計データの更新と永続化 ---
+    statsData.lastRacePoints = thisRaceTotalPayout;
+    statsData.totalPoints += thisRaceTotalPayout;
+    localStorage.setItem(STORAGE_KEY_STATS, JSON.stringify(statsData));
+    updateControlPanelStatsUI(); // 統計UIのリアルタイム更新
+
     broadcast({ type: 'RESULT_PACK', winner: winnerName, payouts });
     showVisualResult({ winner: winnerName, payouts });
 }
@@ -958,83 +991,81 @@ async function importRaceDataZip(input) {
             if (importObject.pools.normal) localStorage.setItem('turf_v25_normal', JSON.stringify(importObject.pools.normal));
             if (importObject.pools.thanks) localStorage.setItem('turf_v25_thanks', JSON.stringify(importObject.pools.thanks));
         }
-
-        if (db) {
-            const transaction = db.transaction(["videos"], "readwrite");
-            const store = transaction.objectStore("videos");
-            const promises = [];
-
-            const videoFolder = zip.folder("videos");
-            if (videoFolder) {
-                videoFolder.forEach((relativePath, fileObj) => {
-                    if (fileObj.dir || !relativePath.endsWith('.bin')) return;
-                    const raceId = relativePath.replace(".bin", "");
-                    const p = fileObj.async("blob").then(blob => {
-                        if (blob.size > 0) {
-                            return new Promise((res) => {
-                                const req = store.put(blob, raceId);
-                                req.onsuccess = () => res();
-                                req.onerror = () => res();
-                            });
-                        }
-                    });
-                    promises.push(p);
-                });
-                await Promise.all(promises);
-            }
-            await new Promise((resolve) => { transaction.oncomplete = () => resolve(); });
-        }
-        alert("🎉 復元成功！再起動します。");
-        window.location.reload();
+        alert("インポートが完了しました。ページをリロードしてください。");
+        location.reload();
     } catch (err) {
         console.error(err);
-        alert("ファイルの読み込みに失敗しました。方法Bをお試しください。");
+        alert("インポートに失敗しました。ファイルを確認してください。");
     }
 }
 
-// 方法B: JSONエクスポート (レース情報テキストのみ・100%安全)
-function exportRaceDataJsonOnly() {
-    const textData = {
-        version: "UMA1_GP_V2.5_TEXT_ONLY",
-        exportedAt: new Date().toISOString(),
-        pools: {
-            normal: JSON.parse(localStorage.getItem('turf_v25_normal') || '[]'),
-            thanks: JSON.parse(localStorage.getItem('turf_v25_thanks') || '[]')
+// --- 【追加機能: 統計・歴代ランキング制御用の新規関数群】 ---
+
+// 歴代プレイヤーのスコア・ランキング情報を更新・保存
+function updateHistoricalData(name, currentChips) {
+    if (!name) return;
+    const existIdx = historicalRanking.findIndex(p => p.name === name);
+    if (existIdx >= 0) {
+        // 既存プレイヤーなら、より高いチップ数を記録 (または現在の最終チップ数に書き換える場合は等号なしで代入)
+        if (currentChips > historicalRanking[existIdx].chips) {
+            historicalRanking[existIdx].chips = currentChips;
         }
-    };
-    const blob = new Blob([JSON.stringify(textData, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `UMA1_GP_LightBackup_${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    alert("🎉 軽量バックアップ成功！\nレース設定を「.json」として保存しました。");
+    } else {
+        // 新規プレイヤー登録
+        historicalRanking.push({ name: name, chips: currentChips });
+    }
+    // ランキング順（チップ数の多い順）にソート
+    historicalRanking.sort((a, b) => b.chips - a.chips);
+    localStorage.setItem(STORAGE_KEY_HISTORICAL, JSON.stringify(historicalRanking));
 }
 
-// 方法B: JSONインポート
-function importRaceDataJsonOnly(input) {
-    const file = input.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const importObject = JSON.parse(e.target.result);
-            if (importObject.pools) {
-                if (importObject.pools.normal) localStorage.setItem('turf_v25_normal', JSON.stringify(importObject.pools.normal));
-                if (importObject.pools.thanks) localStorage.setItem('turf_v25_thanks', JSON.stringify(importObject.pools.thanks));
-                alert("🎉 レース一覧の復元に成功しました！\n動画ファイルは未登録状態になりますので、必要に応じて各レースの「編集」から動画を再度追加してください。");
-                window.location.reload();
-            } else {
-                alert("不正なJSONファイルです。");
-            }
-        } catch (err) {
-            alert("読み込みエラーが発生しました。");
+// 操作パネル（コントローラー画面等）へ集計結果を描写する処理
+function updateControlPanelStatsUI() {
+    // 1. 総獲得ポイントの描写
+    const totalPointsEl = document.getElementById('total-points');
+    if (totalPointsEl) totalPointsEl.innerText = statsData.totalPoints.toLocaleString();
+
+    // 2. 前回の総獲得ポイントの描写
+    const lastPointsEl = document.getElementById('last-points');
+    if (lastPointsEl) lastPointsEl.innerText = statsData.lastRacePoints.toLocaleString();
+
+    // 3. 感謝祭発動目安（50,000）に対する割合の計算・描写
+    const ratio = Math.min(100, (statsData.totalPoints / TG_TARGET_POINTS) * 100);
+    const ratioTextEl = document.getElementById('tg-ratio-text');
+    if (ratioTextEl) ratioTextEl.innerText = ratio.toFixed(1) + '%';
+    
+    // 視覚的なプログレスバーがある場合に対応
+    const ratioBarEl = document.getElementById('tg-ratio-bar');
+    if (ratioBarEl) ratioBarEl.style.width = ratio + '%';
+
+    // 4. 歴代プレイヤーランキングの描写
+    const historicalListEl = document.getElementById('historical-ranking-list');
+    if (historicalListEl) {
+        if (historicalRanking.length === 0) {
+            historicalListEl.innerHTML = '<div style="color:#aaa; font-size:12px; padding:5px;">データがありません</div>';
+        } else {
+            historicalListEl.innerHTML = historicalRanking.map((p, i) => `
+                <div style="display:flex; justify-content:space-between; border-bottom:1px solid #333; padding:6px 4px; font-size:13px;">
+                    <span style="color:${i === 0 ? 'var(--gold)' : '#fff'}; font-weight:${i < 3 ? 'bold' : 'normal'};">
+                        ${i + 1}. ${p.name}
+                    </span>
+                    <span style="color:var(--accent); font-weight:bold;">${p.chips.toLocaleString()} チップ</span>
+                </div>
+            `).join('');
         }
-    };
-    reader.readAsText(file);
+    }
+}
+
+// 統計データを手動リセットしたい場合用の関数
+function resetHistoricalStats() {
+    if (confirm("これまでの総獲得ポイント、および歴代ランキングデータを完全に削除しますか？")) {
+        statsData = { totalPoints: 0, lastRacePoints: 0 };
+        historicalRanking = [];
+        localStorage.removeItem(STORAGE_KEY_STATS);
+        localStorage.removeItem(STORAGE_KEY_HISTORICAL);
+        updateControlPanelStatsUI();
+        alert("統計データをリセットしました。");
+    }
 }
 </script>
 </body>
