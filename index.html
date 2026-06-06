@@ -366,25 +366,16 @@ function toggleHistoryDetails() {
     }
 }
 
+// --- 修正後 ---
 function updateHistoryUI() {
-    document.getElementById('hist-total-chips').innerText = previousRaceStats.total.toLocaleString();
-    document.getElementById('hist-divided-val').innerText = previousRaceStats.divided.toLocaleString();
-    document.getElementById('hist-carry-over').innerText = previousRaceStats.carryOver.toLocaleString();
+    // 値を固定にするか、HTML側でこのエリア自体を非表示(hidden)にしてください
+    if(document.getElementById('hist-total-chips')) document.getElementById('hist-total-chips').innerText = "-";
+    if(document.getElementById('hist-divided-val')) document.getElementById('hist-divided-val').innerText = "-";
+    if(document.getElementById('hist-carry-over')) document.getElementById('hist-carry-over').innerText = "-";
     
-    // 操作パネル用の履歴内ランキング生成
     const rankContainer = document.getElementById('history-ranking-container');
     if (rankContainer) {
-        const ranking = previousRaceStats.ranking || [];
-        if (ranking.length === 0) {
-            rankContainer.innerHTML = '<div style="color:#aaa; font-size:11px; text-align:center; padding:5px;">データがありません</div>';
-        } else {
-            rankContainer.innerHTML = ranking.map((p, idx) => `
-                <div class="history-rank-item">
-                    <span><b>${idx + 1}位</b> ${p.name}</span>
-                    <span style="color:var(--accent); font-weight:bold;">${p.chips.toLocaleString()}玉</span>
-                </div>
-            `).join('');
-        }
+        rankContainer.innerHTML = '<div style="color:#aaa; font-size:11px; text-align:center; padding:5px;">非表示設定中</div>';
     }
 }
 
@@ -781,22 +772,30 @@ function handleData(d, senderConn = null) {
             }
         }
 
-        if(ePrevT) ePrevT.innerText = d.prevStats.total.toLocaleString();
-        if(ePrevD) ePrevD.innerText = d.prevStats.divided;
-        if(ePrevRank && d.prevStats.ranking) {
-            if(d.prevStats.ranking.length === 0) {
-                ePrevRank.innerHTML = '<div style="color:#666; text-align:center;">前回データがありません</div>';
-            } else {
-                ePrevRank.innerHTML = d.prevStats.ranking.map((p, i) => `<div>${i+1}位: ${p.name} (${p.chips}玉)</div>`).join('');
-            }
-        }
+        // --- 修正後 ---
+if(ePrevT) ePrevT.innerText = "非表示"; // または ""
+if(ePrevD) ePrevD.innerText = "-";
+if(ePrevRank) {
+    ePrevRank.innerHTML = '<div style="color:#666; text-align:center;">表示されません</div>';
+}
 
         if(eLiveRank && d.liveRanking) {
             if(d.liveRanking.length === 0) {
                 eLiveRank.innerHTML = '<div style="color:#666; text-align:center;">参加者がいません</div>';
             } else {
+                // 人数（データ件数）に応じて文字サイズを判定するロジック
+                let fontSize = "16px"; // デフォルト（少人数）
+                if (d.liveRanking.length > 20) {
+                    fontSize = "10px"; // 20人超えは大中小の「小」
+                } else if (d.liveRanking.length > 10) {
+                    fontSize = "13px"; // 10人超えは「中」
+                }
+                
+                // コンテナ自体にスタイルを適用
+                eLiveRank.style.fontSize = fontSize;
+
                 eLiveRank.innerHTML = d.liveRanking.map((p, i) => `
-                    <div class="history-rank-item">
+                    <div class="history-rank-item" style="font-size: ${fontSize};">
                         <span><b>${i+1}位</b> ${p.name}</span>
                         <span style="color:var(--accent); font-weight:bold;">${p.chips.toLocaleString()}玉</span>
                     </div>
@@ -1017,10 +1016,16 @@ function showRankingUI(rank) {
     document.getElementById('res-race-part').classList.add('hidden');
     document.getElementById('res-final-part').classList.remove('hidden');
     const list = document.getElementById('final-rank-list');
-    list.innerHTML = rank.map((p,i) => `<div><b>${i+1}位</b> ${p.name} : <span style="color:var(--gold);">${p.chips}玉</span></div>`).join('');
+    
+    // 人数に応じたサイズ判定
+    let fontSize = "18px"; 
+    if (rank.length > 20) fontSize = "11px";
+    else if (rank.length > 10) fontSize = "14px";
+    list.style.fontSize = fontSize;
+
+    list.innerHTML = rank.map((p,i) => `<div style="font-size:${fontSize};"><b>${i+1}位</b> ${p.name} : <span style="color:var(--gold);">${p.chips}玉</span></div>`).join('');
     document.getElementById('result-screen').style.display = 'flex';
 }
-
 function showFinalRankingUI(rank) {
     showRankingUI(rank);
 }
