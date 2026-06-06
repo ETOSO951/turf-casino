@@ -51,10 +51,13 @@
         .bet-buttons-group { display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: 4px; width: 100%; margin-top: 5px; }
         .bet-buttons-group .mini-btn { margin: 0; padding: 12px 5px; text-align: center; width: 100%; box-sizing: border-box; }
 
-        /* 新規追加：ゲージ用スタイル */
-        .gauge-container { background: #222; border-radius: 10px; border: 1px solid #444; height: 24px; position: relative; overflow: hidden; margin: 10px 0; }
-        .gauge-bar { background: linear-gradient(90deg, #00ff88, #00ffd8); height: 100%; width: 0%; transition: width 0.5s ease; }
-        .gauge-text { position: absolute; width: 100%; text-align: center; top: 0; left: 0; line-height: 24px; font-weight: bold; font-size: 13px; color: #fff; text-shadow: 1px 1px 2px #000; }
+        /* ゲージスタイル */
+        .gauge-container { background: #222; border-radius: 10px; border: 1px solid #444; overflow: hidden; margin: 15px 0; position: relative; height: 24px; }
+        .gauge-fill { background: linear-gradient(90deg, var(--blue), var(--accent)); height: 100%; width: 0%; transition: width 0.5s ease; }
+        .gauge-text { position: absolute; width: 100%; text-align: center; top: 0; left: 0; line-height: 24px; font-size: 12px; font-weight: bold; color: #fff; text-shadow: 1px 1px 2px #000; }
+
+        /* 透過ビデオ視聴ボタンの維持用スタイル */
+        .video-overlay-btn { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: transparent; border: none; cursor: pointer; z-index: 5; }
 
         @keyframes pulse {
             0% { opacity: 0.8; }
@@ -68,6 +71,7 @@
 <div id="countdown-overlay">10</div>
 
 <div id="result-screen">
+    <button class="video-overlay-btn" onclick="triggerOverlayVideoPlay()"></button>
     <div id="res-race-part">
         <h1 style="color:var(--accent);">RACE RESULT</h1>
         <div id="res-winner" style="font-size:4em; color:var(--gold);">---</div>
@@ -91,40 +95,8 @@
         <input type="number" id="seriesCount" value="1" placeholder="総レース数">
         <button class="btn" onclick="initPeer('monitor')">モニター起動</button>
         <button class="btn" onclick="initPeer('controller')" style="background:var(--blue); color:#fff;">操作パネル接続</button>
-        <button class="btn" onclick="initPeer('reception')" style="background:var(--accent); color:#000;">受付パネル起動</button>
+        <button class="btn" onclick="initPeer('reception')" style="background:purple; color:#fff;">受付パネル起動</button>
         <button class="btn" onclick="initPeer('guest')" style="background:#fff; color:#000;">運営タブレット参加</button>
-    </div>
-
-    <div id="reception-screen" class="section hidden board">
-        <h2 style="text-align:center; color:var(--accent); margin-top:0;">📋 受付データ管理パネル</h2>
-        
-        <div class="history-panel" style="font-size:15px; line-height: 1.8;">
-            <div>👥 現在の接続人数: <b id="recep-connect-count" style="color:var(--blue);">0</b> 人</div>
-            <div>total 参加者数 (累計): <b id="recep-total-players" style="color:var(--gold);">0</b> 人</div>
-        </div>
-
-        <div class="history-panel">
-            <div style="font-weight:bold; color:var(--gold); margin-bottom:5px;">📊 前回シリーズの最終結果</div>
-            <div>全プレイヤー合計: <b id="recep-hist-total" style="color:var(--gold);">0</b> Chips</div>
-            <div>5000割（整数部分）: <b id="recep-hist-divided">0</b></div>
-            <div>キャリーオーバー: <b id="recep-hist-carry">0</b> Chips</div>
-        </div>
-
-        <div class="history-panel">
-            <div style="font-weight:bold; color:var(--accent); margin-bottom:5px;">📈 復興貢献度チップゲージ（50,000割り）</div>
-            <div>今までの全参加者の総チップ合計: <b id="recep-all-time-chips" style="color:var(--gold);">0</b> Chips</div>
-            <div class="gauge-container">
-                <div id="recep-gauge-bar" class="gauge-bar"></div>
-                <div id="recep-gauge-text" class="gauge-text">0回と 0%</div>
-            </div>
-        </div>
-
-        <div class="history-panel">
-            <div style="font-weight:bold; color:var(--blue); margin-bottom:5px;">🏆 今までの全参加者ランキング (上位10名)</div>
-            <div id="recep-ranking-list" style="max-height: 200px; overflow-y:auto;">
-                <div style="color:#aaa; font-size:12px; text-align:center; padding:5px;">データがありません</div>
-            </div>
-        </div>
     </div>
 
     <div id="data-manager" class="section hidden board">
@@ -184,8 +156,6 @@
     <div id="controller-screen" class="section hidden board">
         <div class="tg-badge">🍁 感謝祭モード適用中 🍁</div>
         
-        <div id="ctrl-alert-msg" style="background:rgba(255,71,87,0.2); border: 2px solid var(--red); border-radius: 8px; padding: 10px; margin-bottom: 10px; text-align: center; font-weight: bold; color: #ffa8b0;" class="hidden"></div>
-
         <div class="history-panel">
             <div class="history-title" onclick="toggleHistoryDetails()">
                 <span>📊 前回シリーズの最終結果とランキング</span>
@@ -220,12 +190,42 @@
             <button class="btn" onclick="requestCloseResult()" style="background:var(--blue); color:#fff;">リザルトを閉じる</button>
         </div>
         <div id="ctrl-final-action" class="hidden">
-            <button class="btn" onclick="requestSystemReset()" style="background:var(--accent); color:#000;">最初からやり重す</button>
+            <button class="btn" onclick="requestSystemReset()" style="background:var(--accent); color:#000;">最初からやり直す</button>
         </div>
         <div id="ctrl-next-action" class="hidden">
             <button class="btn" onclick="requestPickRace()" style="background:var(--gold); color:#000;">次のレースを抽選</button>
         </div>
         <button id="initialPickBtn" class="btn" onclick="requestPickRace()">レースを抽選開始</button>
+    </div>
+
+    <div id="reception-screen" class="section hidden board">
+        <h2 style="text-align:center; color:cyan;">📋 受付確認パネル</h2>
+        <div class="history-panel" style="border-color: cyan;">
+            <div>🟢 現在のリアルタイム接続人数: <b id="recep-conn-count" style="color:var(--accent); font-size:18px;">0</b> 人</div>
+            <div>👥 今回/これまでの登録全参加者数: <b id="recep-total-players" style="color:var(--blue); font-size:18px;">0</b> 人</div>
+        </div>
+
+        <div class="history-panel">
+            <div style="font-weight:bold; color:var(--gold); margin-bottom:5px;">📊 チップ累計目標（50000基準）</div>
+            <div>全参加者の集めたチップ合計: <b id="recep-total-chips-sum" style="color:var(--accent);">0</b> Chips</div>
+            <div class="gauge-container">
+                <div id="recep-gauge-fill" class="gauge-fill"></div>
+                <div id="recep-gauge-text" class="gauge-text">0回達成 (0%)</div>
+            </div>
+        </div>
+
+        <div class="history-panel">
+            <div style="font-weight:bold; color:var(--blue); margin-bottom:5px;">⏮️ 前回の参加者の結果概要</div>
+            <div>前回総チップ数: <span id="recep-prev-total">0</span></div>
+            <div>50000割り回数: <span id="recep-prev-divided">0</span></div>
+        </div>
+
+        <div class="history-panel">
+            <div style="font-weight:bold; color:var(--gold); margin-bottom:8px;">🏆 今までの全参加者ランキング</div>
+            <div id="recep-ranking-list" style="max-height: 200px; overflow-y: auto;">
+                <div style="color:#aaa; text-align:center; font-size:12px;">データ収集中...</div>
+            </div>
+        </div>
     </div>
 
     <div id="monitor-screen" class="section hidden board" style="text-align:center;">
@@ -264,14 +264,9 @@ let peer = null, connections = [], connToMonitor = null;
 let currentRace = null, myChips = 1000, currentRaceNum = 0, seriesTotal = 0;
 let tempBets = {}, confirmedBets = {}, guestBalances = {}, myRole = '';
 let raceStatus = 'idle'; 
+let hasNotified100Percent = false; // 操作パネルへ100%通知を重複させないフラグ
 
-// 前回データ管理オブジェクト
 let previousRaceStats = { total: 0, divided: 0, carryOver: 0, ranking: [] };
-
-// 新規追加：永続的な全体集計・ランキング用（LocalStorageキー）
-const ALL_TIME_CHIPS_KEY = 'turf_all_time_chips';
-const ALL_TIME_RANK_KEY = 'turf_all_time_ranking';
-const TOTAL_PLAYERS_KEY = 'turf_total_players_count';
 
 const STORAGE_KEY_NORMAL = 'turf_v25_normal';
 const STORAGE_KEY_THANKS = 'turf_v25_thanks';
@@ -279,7 +274,6 @@ const PRESET_KEY = 'turf_presets';
 const DEFAULT_PRESET_KEY = 'turf_default_preset';
 const STATS_KEY = 'turf_previous_stats'; 
 
-// --- IndexedDBの初期化と動画復元ロジック ---
 let db = null;
 const dbRequest = indexedDB.open("TurfVideoDB", 1);
 
@@ -308,7 +302,6 @@ function restoreVideosFromDB() {
         }
     };
 }
-// --------------------------------------------------
 
 window.onload = () => {
     const savedNormal = localStorage.getItem(STORAGE_KEY_NORMAL);
@@ -381,6 +374,12 @@ function updateHistoryUI() {
                 </div>
             `).join('');
         }
+    }
+
+    // 受付パネル用の前回同期
+    if (document.getElementById('recep-prev-total')) {
+        document.getElementById('recep-prev-total').innerText = previousRaceStats.total.toLocaleString() + " Chips";
+        document.getElementById('recep-prev-divided').innerText = previousRaceStats.divided + " 回";
     }
 }
 
@@ -524,46 +523,11 @@ function renderMonitorUI() {
     const list = document.getElementById('mon-odds-list');
     if (list) {
         list.innerHTML = currentRace.horses.map(h => `
-            <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #333;">
+            <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #333; padding-top:10px;">
                 <span>${h.name}</span>
                 <span style="color:var(--gold); font-weight:bold;">x${(h.currentOdds || h.initialOdds).toFixed(2)}</span>
             </div>
         `).join('');
-    }
-}
-
-// 新規追加：受付パネル用のUI更新処理（モニターが各パネルに配信）
-function updateReceptionUI(data) {
-    if (myRole !== 'reception') return;
-    if(document.getElementById('recep-connect-count')) document.getElementById('recep-connect-count').innerText = data.connectCount;
-    if(document.getElementById('recep-total-players')) document.getElementById('recep-total-players').innerText = data.totalPlayersCount;
-    
-    if(document.getElementById('recep-hist-total')) document.getElementById('recep-hist-total').innerText = data.prevStats.total.toLocaleString();
-    if(document.getElementById('recep-hist-divided')) document.getElementById('recep-hist-divided').innerText = data.prevStats.divided.toLocaleString();
-    if(document.getElementById('recep-hist-carry')) document.getElementById('recep-hist-carry').innerText = data.prevStats.carryOver.toLocaleString();
-    
-    if(document.getElementById('recep-all-time-chips')) document.getElementById('recep-all-time-chips').innerText = data.allTimeChips.toLocaleString();
-    
-    // 50,000割り計算
-    let times = Math.floor(data.allTimeChips / 50000);
-    let rem = data.allTimeChips % 50000;
-    let percent = Math.floor((rem / 50000) * 100);
-    
-    if(document.getElementById('recep-gauge-bar')) document.getElementById('recep-gauge-bar').style.width = percent + "%";
-    if(document.getElementById('recep-gauge-text')) document.getElementById('recep-gauge-text').innerText = `${times}回と ${percent}%`;
-    
-    const rankList = document.getElementById('recep-ranking-list');
-    if(rankList) {
-        if(data.allTimeRanking.length === 0) {
-            rankList.innerHTML = '<div style="color:#aaa; font-size:12px; text-align:center; padding:5px;">データがありません</div>';
-        } else {
-            rankList.innerHTML = data.allTimeRanking.slice(0, 10).map((p, idx) => `
-                <div class="history-rank-item" style="font-size:14px; padding:6px 0;">
-                    <span><b>${idx + 1}位</b> ${p.name}</span>
-                    <span style="color:var(--accent); font-weight:bold;">${p.chips.toLocaleString()}玉</span>
-                </div>
-            `).join('');
-        }
     }
 }
 
@@ -583,13 +547,8 @@ function initPeer(role) {
             peer.on('connection', c => { 
                 connections.push(c); 
                 c.on('data', d => handleData(d, c)); 
-                // クライアント切断時の処理
-                c.on('close', () => {
-                    connections = connections.filter(item => item.peer !== c.peer);
-                    sendReceptionBroadcast();
-                });
-                // 新規接続時に受付データを同期
-                setTimeout(() => sendReceptionBroadcast(), 500);
+                c.on('close', () => { updateReceptionStatus(); });
+                updateReceptionStatus();
             });
         } else {
             connToMonitor = peer.connect(room);
@@ -604,33 +563,38 @@ function initPeer(role) {
     });
 }
 
-// 受付パネル・操作パネルへ最新の統計データを配信する関数（モニター用）
-function sendReceptionBroadcast() {
-    if (myRole !== 'monitor') return;
+// 受付パネル用データ集計・ゲージ処理
+function updateReceptionStatus() {
+    if(myRole !== 'monitor') return;
+    const activeConns = connections.filter(c => c && c.open).length;
+    const playersList = Object.values(guestBalances);
+    const totalPlayersCount = playersList.length;
     
-    let allTimeChips = parseInt(localStorage.getItem(ALL_TIME_CHIPS_KEY)) || 0;
-    let allTimeRanking = JSON.parse(localStorage.getItem(ALL_TIME_RANK_KEY)) || [];
-    let totalPlayersCount = parseInt(localStorage.getItem(TOTAL_PLAYERS_KEY)) || 0;
-    
-    // 現在のPeer接続数をカウント
-    let connectCount = connections.filter(c => c.open).length;
+    let totalChipsSum = 0;
+    playersList.forEach(p => { totalChipsSum += (p.chips || 0); });
 
-    // ゲージ目標到達(100%)または周回数変化チェック用のロジック
-    let currentTimes = Math.floor(allTimeChips / 50000);
-    let lastTimes = parseInt(localStorage.getItem('turf_last_times_check')) || 0;
-    if (allTimeChips > 0 && currentTimes > lastTimes) {
-        // 100%達成（または周回アップ）のシグナルを送信
-        broadcast({ type: 'GAUGE_100_ALERT', times: currentTimes });
-        localStorage.setItem('turf_last_times_check', currentTimes);
+    const rawPercentage = (totalChipsSum / 50000) * 100;
+    const times = Math.floor(totalChipsSum / 50000);
+    const displayPercent = Math.floor(rawPercentage % 100);
+
+    // 100%達成時に操作パネル宛に連携シグナルを送る
+    if(rawPercentage >= 100 && !hasNotified100Percent) {
+        hasNotified100Percent = true;
+        broadcast({ type: 'CELEBRATE_100PCT' });
+    } else if(rawPercentage < 100) {
+        hasNotified100Percent = false; 
     }
 
+    const rankSorted = [...playersList].sort((a,b) => b.chips - a.chips);
+
     broadcast({
-        type: 'RECEPTION_DATA_SYNC',
-        connectCount: connectCount,
-        totalPlayersCount: totalPlayersCount,
-        allTimeChips: allTimeChips,
-        allTimeRanking: allTimeRanking,
-        prevStats: previousRaceStats
+        type: 'RECEPTION_UPDATE',
+        activeConns,
+        totalPlayersCount,
+        totalChipsSum,
+        times,
+        displayPercent,
+        ranking: rankSorted
     });
 }
 
@@ -645,16 +609,16 @@ function handleData(d, senderConn = null) {
             return;
         }
         if(d.type === 'REQ_TG_SYNC') {
-            if(senderConn && senderConn.open) senderConn.send({ type: 'TG_MODE_SYNC', enabled: isThanksgiving });
+            if(senderConn && senderConn.open) {
+                senderConn.send({ type: 'TG_MODE_SYNC', enabled: isThanksgiving });
+                updateReceptionStatus();
+            }
             return;
         }
         if(d.type === 'JOIN') {
             if (senderConn) {
                 if(!guestBalances[senderConn.peer]){
                     guestBalances[senderConn.peer] = { name: d.name, chips: 1000 };
-                    // 累計参加者数のカウントアップ
-                    let totalP = parseInt(localStorage.getItem(TOTAL_PLAYERS_KEY)) || 0;
-                    localStorage.setItem(TOTAL_PLAYERS_KEY, totalP + 1);
                 } else {
                     guestBalances[senderConn.peer].name = d.name; 
                 }
@@ -667,7 +631,7 @@ function handleData(d, senderConn = null) {
                 } else {
                     senderConn.send({ type: 'RACE_SET', race: null, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving, isActive: false });
                 }
-                sendReceptionBroadcast();
+                updateReceptionStatus();
             }
             return;
         }
@@ -686,6 +650,7 @@ function handleData(d, senderConn = null) {
             currentRace.horses.forEach(h => { h.pool=0; h.bets={}; h.currentOdds=h.initialOdds; });
             broadcast({ type: 'RACE_SET', race: currentRace, num: currentRaceNum, total: seriesTotal, tgMode: isThanksgiving, isActive: true });
             renderMonitorUI();
+            updateReceptionStatus();
             return;
         }
         if(d.type === 'BET') {
@@ -694,10 +659,14 @@ function handleData(d, senderConn = null) {
                 const h = currentRace.horses[d.idx];
                 h.pool = (h.pool || 0) + d.amount;
                 h.bets[senderConn.peer] = (h.bets[senderConn.peer]||0) + d.amount;
-                if(guestBalances[senderConn.peer]) guestBalances[senderConn.peer].chips -= d.amount;
+                // 借金可能システム：残高チェックを無視してマイナスを許容
+                if(guestBalances[senderConn.peer]) {
+                    guestBalances[senderConn.peer].chips -= d.amount;
+                }
                 updateOdds();
                 broadcast({ type: 'UPDATE_STATE', horses: currentRace.horses, balances: guestBalances });
                 renderMonitorUI();
+                updateReceptionStatus();
             }
             return;
         }
@@ -740,25 +709,6 @@ function handleData(d, senderConn = null) {
 
             broadcast({ type: 'SAVE_STATS', stats });
             localStorage.setItem(STATS_KEY, JSON.stringify(stats));
-            previousRaceStats = stats;
-
-            // --- 新規追加：システムリセット時に「今までの全参加者データ」へ累積加算蓄積 ---
-            let allTimeChips = parseInt(localStorage.getItem(ALL_TIME_CHIPS_KEY)) || 0;
-            allTimeChips += currentPoolTotal;
-            localStorage.setItem(ALL_TIME_CHIPS_KEY, allTimeChips);
-
-            let allTimeRanking = JSON.parse(localStorage.getItem(ALL_TIME_RANK_KEY)) || [];
-            rankArray.forEach(p => {
-                let existing = allTimeRanking.find(r => r.name === p.name);
-                if (existing) {
-                    existing.chips += p.chips;
-                } else {
-                    allTimeRanking.push({ name: p.name, chips: p.chips });
-                }
-            });
-            allTimeRanking.sort((a, b) => b.chips - a.chips);
-            localStorage.setItem(ALL_TIME_RANK_KEY, JSON.stringify(allTimeRanking));
-            // ----------------------------------------------------------------------
 
             currentRaceNum = 0;
             guestBalances = {};
@@ -769,25 +719,34 @@ function handleData(d, senderConn = null) {
             document.getElementById('mon-race-name').innerText = "READY";
             document.getElementById('mon-odds-list').innerHTML = "";
             document.getElementById('mon-status').innerText = "";
-            
-            sendReceptionBroadcast();
+            updateReceptionStatus();
             return;
         }
     }
 
-    // 各子パネル（受信側）の処理
-    if(d.type === 'RECEPTION_DATA_SYNC') {
-        updateReceptionUI(d);
-    }
-    if(d.type === 'GAUGE_100_ALERT') {
-        if(myRole === 'controller') {
-            const alertBox = document.getElementById('ctrl-alert-msg');
-            if(alertBox) {
-                alertBox.innerText = `🎉 通知：復興貢献チップゲージが 100% 達成されました！(${d.times}回目完了)`;
-                alertBox.classList.remove('hidden');
-                setTimeout(() => alertBox.classList.add('hidden'), 10000);
-            }
+    // クライアント側（操作・受付・ゲスト）での受信処理
+    if(d.type === 'RECEPTION_UPDATE' && myRole === 'reception') {
+        document.getElementById('recep-conn-count').innerText = d.activeConns;
+        document.getElementById('recep-total-players').innerText = d.totalPlayersCount;
+        document.getElementById('recep-total-chips-sum').innerText = d.totalChipsSum.toLocaleString();
+        
+        document.getElementById('recep-gauge-fill').style.width = d.displayPercent + "%";
+        document.getElementById('recep-gauge-text').innerText = `${d.times}回と ${d.displayPercent}%`;
+
+        const rList = document.getElementById('recep-ranking-list');
+        if(d.ranking.length === 0) {
+            rList.innerHTML = '<div style="color:#aaa; text-align:center; font-size:12px;">データがありません</div>';
+        } else {
+            rList.innerHTML = d.ranking.map((p, idx) => `
+                <div class="history-rank-item">
+                    <span><b>${idx+1}位</b> ${p.name}</span>
+                    <span style="color:var(--accent); font-weight:bold;">${p.chips.toLocaleString()} 玉</span>
+                </div>
+            `).join('');
         }
+    }
+    if(d.type === 'CELEBRATE_100PCT' && myRole === 'controller') {
+        alert("🎉 受付システム連携：全参加者の累計チップが目標の100%を達成しました！");
     }
     if(d.type === 'SAVE_STATS') {
         previousRaceStats = d.stats;
@@ -820,68 +779,58 @@ function handleData(d, senderConn = null) {
         const tgArea = document.getElementById('ctrl-tg-toggle-area');
         if(tgArea) tgArea.classList.add('hidden');
 
-        if(myRole === 'controller') { 
-            updateCtrlUI('pre-race'); 
+        if(myRole === 'controller') {
+            updateCtrlUI('pre-race');
             document.getElementById('ctrl-race-title').innerText = `RACE ${currentRaceNum} / ${seriesTotal}`;
         }
-        if(myRole === 'guest') {
-            if(d.isActive) {
-                showSection('guest-screen');
-                renderGuestBettingUI();
-            } else {
-                showSection('guest-screen');
-                document.getElementById('betting-area').innerHTML = '🕒 次のレース抽選を待っています...';
-            }
+        if(myRole === 'guest' && currentRace) {
+            showSection('guest-screen');
+            renderGuestBettingUI();
         }
     }
     if(d.type === 'UPDATE_STATE') {
+        if(currentRace) currentRace.horses = d.horses;
         guestBalances = d.balances;
-        if(currentRace) {
-            currentRace.horses.forEach((h, idx) => {
-                h.pool = d.horses[idx].pool;
-                h.bets = d.horses[idx].bets;
-                h.currentOdds = d.horses[idx].currentOdds;
-            });
+        if(myRole === 'guest' && peer && d.balances[peer.id]) {
+            myChips = d.balances[peer.id].chips;
+            document.getElementById('my-chips').innerText = myChips.toLocaleString();
         }
-        if(myRole === 'monitor') renderMonitorUI();
-        if(myRole === 'guest') {
-            if(guestBalances[peer.id]) {
-                myChips = guestBalances[peer.id].chips;
-                document.getElementById('my-chips').innerText = myChips.toLocaleString();
-            }
-            if(raceStatus === 'betting') renderGuestBettingUI();
+        if(myRole === 'guest' && raceStatus === 'betting') {
+            renderGuestBettingUI();
         }
     }
-    if(d.type === 'PLAY_VIDEO') {
-        raceStatus = 'racing';
-        if(myRole === 'monitor') {
-            playRaceVideo(d.videoKey, d.winnerIdx);
-        } else {
-            document.getElementById('result-screen').style.display = 'none';
+    if(d.type === 'CLOSE_UI') {
+        document.getElementById('result-screen').style.display = 'none';
+        if(myRole === 'controller') {
+            updateCtrlUI('next-action');
         }
     }
     if(d.type === 'SHOW_RANKING') {
         showRankingUI(d.rank);
-    }
-    if(d.type === 'CLOSE_UI') {
-        document.getElementById('result-screen').style.display = 'none';
-        if(myRole === 'controller') updateCtrlUI('next-action');
+        if(myRole === 'controller') updateCtrlUI('final-action');
     }
     if(d.type === 'RESET_STATE') {
-        currentRaceNum = 0;
-        currentRace = null;
-        raceStatus = 'idle';
+        currentRaceNum = 0; currentRace = null; raceStatus = 'idle';
         if(myRole === 'controller') {
+            updateCtrlUI('initial');
             document.getElementById('ctrl-race-title').innerText = "READY";
-            updateCtrlUI('init');
             const tgArea = document.getElementById('ctrl-tg-toggle-area');
             if(tgArea) tgArea.classList.remove('hidden');
         }
         if(myRole === 'guest') {
             myChips = 1000;
             document.getElementById('my-chips').innerText = "1000";
-            showSection('guest-join-screen');
+            document.getElementById('betting-area').innerText = "（レース抽選待ちです...）";
         }
+        document.getElementById('result-screen').style.display = 'none';
+    }
+}
+
+// 既存の透明ボタンタップでの動画再生トリガー
+function triggerOverlayVideoPlay() {
+    const v = document.getElementById('mainVideo');
+    if(v && v.paused) {
+        v.play().catch(err => console.log("Overlay video play failed:", err));
     }
 }
 
@@ -892,200 +841,206 @@ function updateCtrlUI(state) {
     document.getElementById('ctrl-next-action').classList.add('hidden');
     document.getElementById('initialPickBtn').classList.add('hidden');
 
-    if(state === 'init') document.getElementById('initialPickBtn').classList.remove('hidden');
     if(state === 'pre-race') document.getElementById('ctrl-pre-race').classList.remove('hidden');
     if(state === 'post-race') document.getElementById('ctrl-post-race').classList.remove('hidden');
     if(state === 'final-action') document.getElementById('ctrl-final-action').classList.remove('hidden');
     if(state === 'next-action') document.getElementById('ctrl-next-action').classList.remove('hidden');
+    if(state === 'initial') document.getElementById('initialPickBtn').classList.remove('hidden');
+}
+
+function startMonitorCountdown(targetTimestamp) {
+    const overlay = document.getElementById('countdown-overlay');
+    overlay.style.display = 'block';
+    
+    const interval = setInterval(() => {
+        const remaining = Math.ceil((targetTimestamp - Date.now()) / 1000);
+        if(remaining <= 0) {
+            clearInterval(interval);
+            overlay.style.display = 'none';
+            if(myRole === 'monitor') startRaceVideo();
+        } else {
+            overlay.innerText = remaining > 10 ? 10 : remaining;
+        }
+    }, 200);
+}
+
+function startRaceVideo() {
+    raceStatus = 'racing';
+    broadcast({ type: 'RACE_START_SIGNAL', status: 'racing' });
+    
+    const videoId = currentRace.videoId;
+    const blobUrl = videoMap.get(videoId);
+    const videoEl = document.getElementById('mainVideo');
+    
+    if(!blobUrl) {
+        alert("動画ファイルが見つかりません。リザルトへスキップします。");
+        endRace();
+        return;
+    }
+    
+    videoEl.src = blobUrl;
+    videoEl.style.display = 'block';
+    videoEl.play();
+    
+    videoEl.onended = () => {
+        videoEl.style.display = 'none';
+        endRace();
+    };
+}
+
+function endRace() {
+    raceStatus = 'result';
+    const horses = currentRace.horses;
+    
+    // 払い戻し計算
+    let winnerIdx = 0;
+    let maxVal = -1;
+    horses.forEach((h, idx) => {
+        const roll = Math.random() * (h.currentOdds || 2.0);
+        if(roll > maxVal) { maxVal = roll; winnerIdx = idx; }
+    });
+    
+    const winner = horses[winnerIdx];
+    const payoutOdds = winner.currentOdds || 2.0;
+    
+    Object.keys(guestBalances).forEach(pid => {
+        const betAmt = winner.bets[pid] || 0;
+        if(betAmt > 0) {
+            guestBalances[pid].chips += Math.floor(betAmt * payoutOdds);
+        }
+    });
+    
+    let payoutHtml = `<b>🎯 一着: ${winner.name} (x${payoutOdds.toFixed(2)})</b><br><br>`;
+    Object.values(guestBalances).forEach(p => {
+        payoutHtml += `${p.name}: ${p.chips.toLocaleString()}玉<br>`;
+    });
+
+    broadcast({ type: 'UPDATE_STATE', horses: currentRace.horses, balances: guestBalances });
+    
+    document.getElementById('res-race-part').classList.remove('hidden');
+    document.getElementById('res-final-part').classList.add('hidden');
+    document.getElementById('res-winner').innerText = winner.name;
+    document.getElementById('res-payout-list').innerHTML = payoutHtml;
+    document.getElementById('result-screen').style.display = 'flex';
+    
+    broadcast({ type: 'SHOW_RESULT_SCREEN', winnerName: winner.name, payoutHtml });
+    updateReceptionStatus();
+
+    if(connections.some(c => c.peer.includes('_controller'))) {
+        // コントローラーが繋がっている場合
+    } else {
+        // スタンドアロン用自動制御維持
+    }
+    // どちらにせよMonitor側が同期データを受け取ったら操作パネル側で状態を切り替える
+    connections.forEach(c => {
+        if(c.peer.includes('_controller')) c.send({type: 'CLOSE_UI_TRIGGER_STB'});
+    });
+}
+
+// 受信追加：リザルト同期
+if(myRole !== 'monitor') {
+    // 拡張受信用
+    peer?.on('connection', c => {
+        c.on('data', d => {
+            if(d.type === 'SHOW_RESULT_SCREEN') {
+                document.getElementById('res-race-part').classList.remove('hidden');
+                document.getElementById('res-final-part').classList.add('hidden');
+                document.getElementById('res-winner').innerText = d.winnerName;
+                document.getElementById('res-payout-list').innerHTML = d.payoutHtml;
+                document.getElementById('result-screen').style.display = 'flex';
+            }
+            if(d.type === 'CLOSE_UI_TRIGGER_STB' && myRole === 'controller') {
+                updateCtrlUI('post-race');
+            }
+        });
+    });
+}
+
+function showRankingUI(rank) {
+    document.getElementById('res-race-part').classList.add('hidden');
+    document.getElementById('res-final-part').classList.remove('hidden');
+    
+    const listEl = document.getElementById('final-rank-list');
+    listEl.innerHTML = rank.map((p, i) => `
+        <div style="display:flex; justify-content:space-between; width:100%;">
+            <span>${i+1}位 ${p.name}</span>
+            <span style="color:var(--gold); font-weight:bold;">${p.chips.toLocaleString()}玉</span>
+        </div>
+    `).join('');
+    document.getElementById('result-screen').style.display = 'flex';
 }
 
 function guestJoin() {
     const name = document.getElementById('playerName').value;
     if(!name) return alert("名前を入力してください");
     document.getElementById('display-name').innerText = name;
-    broadcast({ type: 'JOIN', name });
+    if (connToMonitor) {
+        connToMonitor.send({ type: 'JOIN', name });
+    }
 }
 
 function renderGuestBettingUI() {
-    if (!currentRace) return;
-    const container = document.getElementById('betting-area');
+    const area = document.getElementById('betting-area');
+    if(!currentRace) { area.innerText = "レースデータがありません"; return; }
     
-    let html = `<p style="font-size:13px; color:#aaa; margin:0 0 10px 0;">🏁 ${currentRace.name}</p>`;
-    
+    let html = `<p style="color:var(--gold); font-weight:bold; margin:5px 0;">${currentRace.name}</p>`;
+    html += `<div style="font-size:11px; color:#aaa; margin-bottom:10px;">※借金可能。残高に関わらずベットできます。</div>`;
+
     currentRace.horses.forEach((h, idx) => {
-        let myBet = (confirmedBets[idx] || 0);
-        let tempBet = (tempBets[idx] || 0);
+        const myBet = h.bets[peer.id] || 0;
+        const tempBet = tempBets[idx] || 0;
         
         html += `
             <div style="background:rgba(255,255,255,0.03); padding:8px; border-radius:6px; margin-bottom:8px; border:1px solid #333;">
                 <div style="display:flex; justify-content:space-between; font-size:14px;">
-                    <span><b>${idx+1}</b> ${h.name}</span>
-                    <span style="color:var(--gold);">x${(h.currentOdds || h.initialOdds).toFixed(2)}</span>
-                </div>
-                <div style="font-size:11px; color:#aaa; margin:2px 0;">
-                    投票中: <span style="color:var(--accent);">${myBet}</span> 
-                    ${tempBet > 0 ? ` (+<span style="color:var(--blue);">${tempBet}</span>)` : ''}
+                    <span><b>${h.name}</b> <small style="color:var(--gold);">x${(h.currentOdds || h.initialOdds).toFixed(2)}</small></span>
+                    <span style="color:var(--accent);">計: ${myBet + tempBet} 玉</span>
                 </div>
                 <div class="bet-buttons-group">
-                    <button class="mini-btn" style="background:#555;" onclick="changeTempBet(${idx}, 10)">+10</button>
-                    <button class="mini-btn" style="background:#777;" onclick="changeTempBet(${idx}, 100)">+100</button>
-                    <button class="mini-btn" style="background:#999;" onclick="changeTempBet(${idx}, 500)">+500</button>
-                    <button class="mini-btn" style="background:var(--accent); color:#000;" onclick="submitBet(${idx})">BET確定</button>
+                    <button class="mini-btn" style="background:#333;" onclick="changeTempBet(${idx}, 10)">+10</button>
+                    <button class="mini-btn" style="background:#444;" onclick="changeTempBet(${idx}, 100)">+100</button>
+                    <button class="mini-btn" style="background:#555;" onclick="changeTempBet(${idx}, 500)">+500</button>
+                    <button class="mini-btn" style="background:var(--blue); color:#fff;" onclick="submitBet(${idx})">BET確定</button>
                 </div>
             </div>
         `;
     });
-    container.innerHTML = html;
-}
-
-// 借金可能（マイナスでも追加で入力可能）にするために制限チェックを排除
-function changeTempBet(idx, amt) {
-    tempBets[idx] = (tempBets[idx] || 0) + amt;
-    renderGuestBettingUI();
-}
-
-function submitBet(idx) {
-    const amt = tempBets[idx] || 0;
-    if(amt <= 0) return;
-    
-    // サーバーへ送信（借金可能のためmyChipsの減算上限なしでそのまま許可）
-    broadcast({ type: 'BET', idx, amount: amt });
-    confirmedBets[idx] = (confirmedBets[idx] || 0) + amt;
-    tempBets[idx] = 0;
-    renderGuestBettingUI();
+    area.innerHTML = html;
 }
 
 function renderGuestPlayingUI() {
     document.getElementById('betting-area').innerHTML = `
-        <div style="text-align:center; padding:30px 0;">
-            <div style="font-size:24px; color:var(--accent); font-weight:bold; animation:pulse 1s infinite;">📢 RACE START</div>
-            <p style="color:#aaa; font-size:13px; margin-top:10px;">画面を伏せてメインモニターにご注目ください！</p>
+        <div style="text-align:center; padding:30px; color:var(--accent);">
+            <h2>🏁 レース中 🏁</h2>
+            <p>モニター画面に注目してください！</p>
         </div>
     `;
 }
 
-function startMonitorCountdown(targetTime) {
-    raceStatus = 'countdown';
-    const overlay = document.getElementById('countdown-overlay');
-    if(overlay) overlay.style.display = 'block';
+function changeTempBet(idx, amount) {
+    tempBets[idx] = (tempBets[idx] || 0) + amount;
+    renderGuestBettingUI();
+}
+
+function submitBet(idx) {
+    const amount = tempBets[idx] || 0;
+    if(amount <= 0) return alert("数量を追加してから確定してください");
     
-    // コントローラー・ゲストの画面ロック遷移シグナル
-    if(myRole === 'monitor') {
-        broadcast({type:'RACE_START_SIGNAL', status: 'countdown'});
+    // 借金可能にするため、myChips >= amount などの残高バリデーション制限を撤廃
+    if(connToMonitor) {
+        connToMonitor.send({ type: 'BET', idx, amount });
     }
-
-    const timer = setInterval(() => {
-        let remain = Math.ceil((targetTime - Date.now()) / 1000);
-        if(remain <= 0) {
-            clearInterval(timer);
-            if(overlay) overlay.style.display = 'none';
-            if(myRole === 'monitor' && currentRace) {
-                let winnerIdx = Math.floor(Math.random() * currentRace.horses.length);
-                broadcast({ type: 'PLAY_VIDEO', videoKey: currentRace.videoKey, winnerIdx });
-                playRaceVideo(currentRace.videoKey, winnerIdx);
-            }
-        } else {
-            if(overlay) overlay.innerText = remain;
-        }
-    }, 200);
+    tempBets[idx] = 0;
 }
 
-function playRaceVideo(videoKey, winnerIdx) {
-    raceStatus = 'racing';
-    const videoUrl = videoMap.get(videoKey);
-    const videoEl = document.getElementById('mainVideo');
-    
-    if(!videoUrl || !videoEl) {
-        alert("動画ファイルが見つかりません。リザルトを表示します。");
-        endRaceAndCalculate(winnerIdx);
-        return;
-    }
-
-    videoEl.src = videoUrl;
-    videoEl.style.display = 'block';
-    videoEl.play();
-
-    videoEl.onended = () => {
-        videoEl.style.display = 'none';
-        videoEl.src = "";
-        if(myRole === 'monitor') {
-            endRaceAndCalculate(winnerIdx);
-        }
-    };
-}
-
-function endRaceAndCalculate(winnerIdx) {
-    raceStatus = 'result';
-    const h = currentRace.horses[winnerIdx];
-    
-    // 配当計算
-    let payoutInfos = [];
-    Object.entries(h.bets || {}).forEach(([peerId, betAmt]) => {
-        let winAmt = Math.floor(betAmt * h.currentOdds);
-        if(guestBalances[peerId]) {
-            guestBalances[peerId].chips += winAmt;
-        }
-        payoutInfos.push({ name: guestBalances[peerId]?.name || "Guest", win: winAmt });
-    });
-
-    broadcast({ type: 'UPDATE_STATE', horses: currentRace.horses, balances: guestBalances });
-
-    // リザルト表示
-    showRaceResultScreen(h.name, payoutInfos);
-}
-
-function showRaceResultScreen(winnerName, payouts) {
-    const screen = document.getElementById('result-screen');
-    screen.style.display = 'flex';
-    document.getElementById('res-race-part').classList.remove('hidden');
-    document.getElementById('res-final-part').classList.add('hidden');
-    
-    document.getElementById('res-winner').innerText = winnerName;
-    const list = document.getElementById('res-payout-list');
-    list.innerHTML = payouts.map(p => `
-        <div style="display:flex; justify-content:space-between; margin-bottom:5px; border-bottom:1px solid #333;">
-            <span>${p.name}</span>
-            <span style="color:var(--accent); font-weight:bold;">+${p.win.toLocaleString()}</span>
-        </div>
-    `).join('');
-
-    if(myRole === 'monitor') {
-        if(currentRaceNum >= seriesTotal) {
-            updateCtrlUI('final-action');
-        } else {
-            updateCtrlUI('post-race');
-        }
-    }
-}
-
-function showRankingUI(rank) {
-    const screen = document.getElementById('result-screen');
-    screen.style.display = 'flex';
-    document.getElementById('res-race-part').classList.add('hidden');
-    document.getElementById('res-final-part').classList.remove('hidden');
-
-    const container = document.getElementById('final-rank-list');
-    container.innerHTML = rank.map((p, idx) => `
-        <div style="display:flex; justify-content:space-between; border-bottom:1px solid #444;">
-            <span><b>${idx+1}位</b> ${p.name}</span>
-            <span style="color:var(--gold); font-weight:bold;">${p.chips.toLocaleString()}玉</span>
-        </div>
-    `).join('');
-
-    if(myRole === 'monitor') updateCtrlUI('final-action');
-}
-
-// ----------------------------------------------------------------------
-// [データ管理タブ内の既存ロジック用ヘルパー群 - 完全維持]
-// ----------------------------------------------------------------------
-function addHorseField(name='', odds='') {
+function addHorseField(name='', odds=2.0) {
     const row = document.createElement('div');
     row.className = 'horse-input-row';
     row.innerHTML = `
-        <input type="text" class="h-name" placeholder="馬名" value="${name}">
-        <input type="number" class="h-odds" placeholder="オッズ" step="0.1" value="${odds}">
-        <div></div>
-        <button class="mini-btn" style="background:var(--red); margin:0;" onclick="this.parentElement.remove()">X</button>
+        <input type="text" class="horse-name" placeholder="馬・選手名" value="${name}">
+        <input type="number" class="horse-odds" placeholder="オッズ" step="0.1" value="${odds}">
+        <div style="display:flex;align-items:center;justify-content:center;font-size:11px;color:#aaa;">初期</div>
+        <button class="mini-btn" style="background:var(--red);" onclick="this.parentElement.remove()">X</button>
     `;
     document.getElementById('horse-inputs').appendChild(row);
 }
@@ -1096,143 +1051,143 @@ function resetForm() {
     document.getElementById('videoFile').value = '';
     document.getElementById('video-status').innerText = '';
     document.getElementById('horse-inputs').innerHTML = '';
-    document.getElementById('cancel-edit-btn').classList.add('hidden');
-    document.getElementById('apply-btn').innerText = "保存して一覧を更新";
-    addHorseField(); addHorseField();
+    addHorseField('1枠', 2.0);
+    addHorseField('2枠', 3.5);
 }
 
 function applyToPool() {
     const id = document.getElementById('editingId').value || 'race_' + Date.now();
     const name = document.getElementById('raceName').value;
-    const fileEl = document.getElementById('videoFile');
-    
     if(!name) return alert("レース名を入力してください");
-
+    
     const horseRows = document.querySelectorAll('.horse-input-row');
-    let horses = [];
+    const horses = [];
     horseRows.forEach(row => {
-        let hName = row.querySelector('.h-name').value;
-        let hOdds = parseFloat(row.querySelector('.h-odds').value) || 2.0;
+        const hName = row.querySelector('.horse-name').value;
+        const hOdds = parseFloat(row.querySelector('.horse-odds').value) || 2.0;
         if(hName) horses.push({ name: hName, initialOdds: hOdds, pool: 0, bets: {} });
     });
-
+    
     if(horses.length === 0) return alert("馬を1頭以上登録してください");
-
-    const targetPool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
-    const storageKey = currentDataTab === 'race-thanks' ? STORAGE_KEY_THANKS : STORAGE_KEY_NORMAL;
-
-    const saveProcess = (videoKey) => {
-        const existingIdx = targetPool.findIndex(r => r.id === id);
-        const raceData = { id, name, videoKey, horses };
-
-        if(existingIdx >= 0) targetPool[existingIdx] = raceData;
-        else targetPool.push(raceData);
-
-        localStorage.setItem(storageKey, JSON.stringify(targetPool));
-        resetForm();
-        updateRaceListUI();
-        alert("レースデータを保存しました");
-    };
-
-    if(fileEl.files.length > 0) {
-        const file = fileEl.files[0];
-        const vKey = 'vid_' + Date.now();
-        if(!db) return alert("IndexedDBが準備できていません");
-        const tx = db.transaction(["videos"], "readwrite");
-        tx.objectStore("videos").put(file, vKey);
-        tx.oncomplete = () => saveProcess(vKey);
-    } else {
-        const oldId = document.getElementById('editingId').value;
-        const oldRace = targetPool.find(r => r.id === oldId);
-        saveProcess(oldRace ? oldRace.videoKey : '');
+    
+    const fileInput = document.getElementById('videoFile');
+    const file = fileInput.files[0];
+    const videoId = document.getElementById('editingId').value ? racePool.find(r=>r.id === id)?.videoId || 'vid_' + Date.now() : 'vid_' + Date.now();
+    
+    if(file && db) {
+        const transaction = db.transaction(["videos"], "readwrite");
+        const store = transaction.objectStore("videos");
+        store.put(file, videoId);
+        videoMap.set(videoId, URL.createObjectURL(file));
     }
+
+    const raceData = { id, name, videoId, horses };
+    
+    let targetPool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
+    const existingIdx = targetPool.findIndex(r => r.id === id);
+    if(existingIdx >= 0) targetPool[existingIdx] = raceData;
+    else targetPool.push(raceData);
+    
+    localStorage.setItem(currentDataTab === 'race-thanks' ? STORAGE_KEY_THANKS : STORAGE_KEY_NORMAL, JSON.stringify(targetPool));
+    
+    alert("保存しました");
+    resetForm();
+    updateRaceListUI();
 }
 
 function updateRaceListUI() {
     const container = document.getElementById('race-list-display');
     if(!container) return;
     const targetPool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
-
+    
     if(targetPool.length === 0) {
-        container.innerHTML = '<p style="text-align:center; color:#666; font-size:13px;">登録データがありません</p>';
+        container.innerHTML = "<p style='color:#666; font-size:12px;'>登録されたレースはありません</p>";
         return;
     }
-
-    container.innerHTML = targetPool.map(r => `
-        <div class="race-card">
-            <div>
-                <b style="color:var(--gold);">${r.name}</b>
-                <div style="font-size:11px; color:#aaa; margin-top:2px;">
-                    🐴 出走頭数: ${r.horses.length}頭 / 🎥 動画: ${r.videoKey ? 'あり' : 'なし'}
+    
+    container.innerHTML = targetPool.map(r => {
+        const hasVid = videoMap.has(r.videoId);
+        return `
+            <div class="race-card" style="border-left-color: ${currentDataTab === 'race-thanks' ? '#ff9f43' : 'var(--blue)'};">
+                <div>
+                    <strong>${r.name}</strong> <small style="color:#aaa;">(${r.horses.length}頭立)</small>
+                    <div style="font-size:11px; color:${hasVid?'var(--accent)':'var(--red)'};">
+                        ${hasVid ? '▶ 動画登録済み' : '⚠️ 動画未登録（再生されません）'}
+                    </div>
+                </div>
+                <div style="display:flex; gap:3px;">
+                    <button class="mini-btn" style="background:#555;" onclick="editRace('${r.id}')">編集</button>
+                    <button class="mini-btn" style="background:var(--red);" onclick="deleteRace('${r.id}')">削除</button>
                 </div>
             </div>
-            <div style="display:flex; gap:3px;">
-                <button class="mini-btn" style="background:var(--blue);" onclick="editRace('${r.id}')">編集</button>
-                <button class="mini-btn" style="background:var(--red);" onclick="deleteRace('${r.id}')">削除</button>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function editRace(id) {
     const targetPool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
-    const r = targetPool.find(item => item.id === id);
-    if(!r) return;
-
-    document.getElementById('editingId').value = r.id;
-    document.getElementById('raceName').value = r.name;
-    document.getElementById('video-status').innerText = r.videoKey ? "※既存の登録動画があります（変更時のみ選択）" : "動画なし";
+    const race = targetPool.find(r => r.id === id);
+    if(!race) return;
+    
+    document.getElementById('editingId').value = race.id;
+    document.getElementById('raceName').value = race.name;
+    document.getElementById('video-status').innerText = videoMap.has(race.videoId) ? "※新しい動画を選択すると上書きされます" : "";
     
     const inputs = document.getElementById('horse-inputs');
     inputs.innerHTML = '';
-    r.horses.forEach(h => addHorseField(h.name, h.initialOdds));
-
+    race.horses.forEach(h => {
+        addHorseField(h.name, h.initialOdds);
+    });
     document.getElementById('cancel-edit-btn').classList.remove('hidden');
-    document.getElementById('apply-btn').innerText = "変更を適用して更新";
 }
 
 function deleteRace(id) {
     if(!confirm("本当に削除しますか？")) return;
     let targetPool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
-    const storageKey = currentDataTab === 'race-thanks' ? STORAGE_KEY_THANKS : STORAGE_KEY_NORMAL;
-
-    const targetRace = targetPool.find(r => r.id === id);
-    if(targetRace && targetRace.videoKey && db) {
-        const tx = db.transaction(["videos"], "readwrite");
-        tx.objectStore("videos').delete(targetRace.videoKey);
+    const race = targetPool.find(r => r.id === id);
+    
+    if(race && db) {
+        const transaction = db.transaction(["videos"], "readwrite");
+        transaction.objectStore("videos").delete(race.videoId);
+        videoMap.delete(race.videoId);
     }
-
-    targetPool = targetPool.filter(r => r.id !== id);
-    if(currentDataTab === 'race-thanks') thanksRacePool = targetPool;
-    else racePool = targetPool;
-
-    localStorage.setItem(storageKey, JSON.stringify(targetPool));
+    
+    if(currentDataTab === 'race-thanks') {
+        thanksRacePool = thanksRacePool.filter(r => r.id !== id);
+        localStorage.setItem(STORAGE_KEY_THANKS, JSON.stringify(thanksRacePool));
+    } else {
+        racePool = racePool.filter(r => r.id !== id);
+        localStorage.setItem(STORAGE_KEY_NORMAL, JSON.stringify(racePool));
+    }
     updateRaceListUI();
 }
 
-// ZIPバックアップ / 復元ロジック
+// ZIPエクスポート・インポート
 async function exportRaceDataZip() {
     const zip = new JSZip();
-    zip.file("normal_races.json", JSON.stringify(racePool));
-    zip.file("thanks_races.json", JSON.stringify(thanksRacePool));
-
+    const meta = { normal: racePool, thanks: thanksRacePool, version: "v25_fixed" };
+    zip.file("meta.json", JSON.stringify(meta));
+    
+    const videoFolder = zip.folder("videos");
     if(db) {
-        const tx = db.transaction(["videos"], "readonly");
-        const store = tx.objectStore("videos");
-        const keys = await new Promise(res => {
-            store.getAllKeys().onsuccess = (e) => res(e.target.result);
-        });
+        const transaction = db.transaction(["videos"], "readonly");
+        const store = transaction.objectStore("videos");
         
-        for(let key of keys) {
-            const blob = await new Promise(res => {
-                store.get(key).onsuccess = (e) => res(e.target.result);
-            });
-            if(blob) zip.file(`videos/${key}.mp4`, blob);
-        }
+        const loadAllVideos = () => new Promise((resolve) => {
+            const req = store.openCursor();
+            req.onsuccess = (e) => {
+                const cursor = e.target.result;
+                if(cursor) {
+                    videoFolder.file(cursor.key, cursor.value);
+                    cursor.continue();
+                } else { resolve(); }
+            };
+        });
+        await loadAllVideos();
     }
-
+    
     zip.generateAsync({type:"blob"}).then((content) => {
-        const a = document.createElement('a');
+        const a = document.createElement("a");
         a.href = URL.createObjectURL(content);
         a.download = `UMA1_GP_Backup_${Date.now()}.zip`;
         a.click();
@@ -1240,59 +1195,72 @@ async function exportRaceDataZip() {
 }
 
 function importRaceDataZip(input) {
-    if(input.files.length === 0) return;
     const file = input.files[0];
+    if(!file) return;
+    
     JSZip.loadAsync(file).then(async (zip) => {
-        if(zip.file("normal_races.json")) {
-            const txt = await zip.file("normal_races.json").async("text");
-            racePool = JSON.parse(txt);
-            localStorage.setItem(STORAGE_KEY_NORMAL, txt);
+        const metaStr = await zip.file("meta.json").async("string");
+        const meta = JSON.parse(metaStr);
+        
+        if(meta.normal) {
+            racePool = meta.normal;
+            localStorage.setItem(STORAGE_KEY_NORMAL, JSON.stringify(racePool));
         }
-        if(zip.file("thanks_races.json")) {
-            const txt = await zip.file("thanks_races.json").async("text");
-            thanksRacePool = JSON.parse(txt);
-            localStorage.setItem(STORAGE_KEY_THANKS, txt);
+        if(meta.thanks) {
+            thanksRacePool = meta.thanks;
+            localStorage.setItem(STORAGE_KEY_THANKS, JSON.stringify(thanksRacePool));
         }
-
+        
         const videoFolder = zip.folder("videos");
-        if(videoFolder && db) {
-            const tx = db.transaction(["videos"], "readwrite");
-            const store = tx.objectStore("videos");
-            videoFolder.forEach(async (relativePath, fileObj) => {
-                const key = relativePath.replace(".mp4", "");
-                const blob = await fileObj.async("blob");
-                store.put(blob, key);
+        const promises = [];
+        
+        videoFolder.forEach((relativePath, fileObj) => {
+            promises.push(fileObj.async("blob").then(blob => {
+                return { key: relativePath, blob: blob };
+            }));
+        });
+        
+        const resolvedVids = await Promise.all(promises);
+        if(db && resolvedVids.length > 0) {
+            const transaction = db.transaction(["videos"], "readwrite");
+            const store = transaction.objectStore("videos");
+            resolvedVids.forEach(v => {
+                store.put(v.blob, v.key);
+                videoMap.set(v.key, URL.createObjectURL(v.blob));
             });
         }
-        alert("ZIPからデータを復元しました。再読み込みします。");
-        location.reload();
+        
+        alert("ZIPからのデータ復元が完了しました。");
+        updateRaceListUI();
+    }).catch(err => {
+        alert("ZIP解析中にエラーが発生しました: " + err);
     });
 }
 
 function exportRaceDataJsonOnly() {
-    const data = { normal: racePool, thanks: thanksRacePool };
-    const blob = new Blob([JSON.stringify(data)], {type:"application/json"});
-    const a = document.createElement('a');
+    const meta = { normal: racePool, thanks: thanksRacePool };
+    const blob = new Blob([JSON.stringify(meta)], {type: "application/json"});
+    const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `UMA1_GP_Config_${Date.now()}.json`;
+    a.download = `UMA1_GP_ConfigOnly_${Date.now()}.json`;
     a.click();
 }
 
 function importRaceDataJsonOnly(input) {
-    if(input.files.length === 0) return;
     const file = input.files[0];
+    if(!file) return;
     const reader = new FileReader();
     reader.onload = (e) => {
-        const data = JSON.parse(e.target.result);
-        if(data.normal) {
-            racePool = data.normal;
+        const meta = JSON.parse(e.target.result);
+        if(meta.normal) {
+            racePool = meta.normal;
             localStorage.setItem(STORAGE_KEY_NORMAL, JSON.stringify(racePool));
         }
-        if(data.thanks) {
-            thanksRacePool = data.thanks;
+        if(meta.thanks) {
+            thanksRacePool = meta.thanks;
             localStorage.setItem(STORAGE_KEY_THANKS, JSON.stringify(thanksRacePool));
         }
-        alert("設定jsonから復元しました。");
+        alert("設定ファイルのインポートが完了しました。(動画ファイルは別途再添付が必要です)");
         updateRaceListUI();
     };
     reader.readAsText(file);
