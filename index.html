@@ -441,7 +441,7 @@ function getPresets() {
     const data = localStorage.getItem(PRESET_KEY);
     return data ? JSON.parse(data) : [];
 }
-// プリセット保存ロジック
+
 function saveNewPreset() {
     const name = prompt('このプリセットに名前をつけてください:');
     if(!name) return;
@@ -457,6 +457,7 @@ function saveNewPreset() {
     updatePresetList();
     alert(`「${name}」として保存しました`);
 }
+
 function updatePresetList() {
     const presets = getPresets();
     const defaultPresetId = localStorage.getItem(DEFAULT_PRESET_KEY);
@@ -475,6 +476,7 @@ function updatePresetList() {
             </div>
         </div>`).join('');
 }
+
 function applyPreset(presetId) {
     const presets = getPresets();
     const preset = presets.find(p => p.id === presetId);
@@ -485,11 +487,13 @@ function applyPreset(presetId) {
         document.getElementById('seriesCount').value = preset.seriesCount;
     }
 }
+
 function setDefaultPreset(presetId) {
     localStorage.setItem(DEFAULT_PRESET_KEY, presetId);
     updatePresetList();
     alert('デフォルトに設定しました');
 }
+
 function deletePreset(presetId) {
     if(!confirm('削除しますか？')) return;
     let presets = getPresets();
@@ -498,6 +502,7 @@ function deletePreset(presetId) {
     if(localStorage.getItem(DEFAULT_PRESET_KEY) === presetId) localStorage.removeItem(DEFAULT_PRESET_KEY);
     updatePresetList();
 }
+
 function loadDefaultPreset() {
     const defaultPresetId = localStorage.getItem(DEFAULT_PRESET_KEY);
     if(defaultPresetId) applyPreset(defaultPresetId);
@@ -565,12 +570,10 @@ function initPeer(role) {
             peer.on('connection', c => { 
                 connections.push(c); 
                 
-                // 追加：接続が入ったら人数を更新して同期
                 setTimeout(() => sendReceptionUpdate(), 500);
 
                 c.on('data', d => handleData(d, c)); 
                 
-                // 追加：切断を検知したとき
                 c.on('close', () => {
                     connections = connections.filter(conn => conn.peer !== c.peer);
                     sendReceptionUpdate();
@@ -644,7 +647,6 @@ function handleData(d, senderConn = null) {
                 h.pool = (h.pool || 0) + d.amount;
                 h.bets[senderConn.peer] = (h.bets[senderConn.peer]||0) + d.amount;
                 
-                // 変更：残高が足りなくてもマイナス（借金）を許可してそのまま減算
                 if(guestBalances[senderConn.peer]) {
                     guestBalances[senderConn.peer].chips -= d.amount;
                 }
@@ -652,13 +654,7 @@ function handleData(d, senderConn = null) {
                 updateOdds();
                 broadcast({ type: 'UPDATE_STATE', horses: currentRace.horses, balances: guestBalances });
                 renderMonitorUI();
-                sendReceptionUpdate(); // 追加：受付パネル側にもリアルタイムのチップ状態を伝える
-            }
-            return;
-        }
-                updateOdds();
-                broadcast({ type: 'UPDATE_STATE', horses: currentRace.horses, balances: guestBalances });
-                renderMonitorUI();
+                sendReceptionUpdate(); 
             }
             return;
         }
@@ -692,8 +688,6 @@ function handleData(d, senderConn = null) {
             const divided = Math.floor(finalCombinedPool / 5000);
             const carryOver = finalCombinedPool % 5000;
 
-            // 算出した戦績データにプレイヤーランキングの簡易スナップショットを含める
-            // 算出した戦績データにプレイヤーランキングの簡易スナップショットを含める
             const stats = { 
                 total: finalCombinedPool, 
                 divided, 
@@ -701,21 +695,16 @@ function handleData(d, senderConn = null) {
                 ranking: rankArray.map(p => ({ name: p.name, chips: p.chips }))
             };
 
-            // 🌟 追加：今までの全参加者データを更新・蓄積するロジック
             rankArray.forEach(p => {
-                // 各プレイヤーのこれまでの最高もしくは最新スコアを記録
                 allTimeData.userHistoryMap[p.name] = (allTimeData.userHistoryMap[p.name] || 0) + p.chips;
             });
-            // 今シリーズで全参加者が最終的に集めたチップ合計（マイナス分も含む純増・減）を累計に加算
             let seriesUserTotal = 0;
             Object.values(guestBalances).forEach(p => { seriesUserTotal += (p.chips || 0); });
             allTimeData.totalChipsEver += seriesUserTotal;
-            if(allTimeData.totalChipsEver < 0) allTimeData.totalChipsEver = 0; // 負数は0ガード
+            if(allTimeData.totalChipsEver < 0) allTimeData.totalChipsEver = 0; 
 
-            // ローカルストレージへ保存
             localStorage.setItem(ALL_TIME_DATA_KEY, JSON.stringify(allTimeData));
 
-            // 🎯 追加：累計チップが50000を超えた（100%達成）場合の操作パネル連携判定
             if (allTimeData.totalChipsEver >= 50000) {
                 broadcast({ type: 'TARGET_ACHIEVED', achieved: true });
             } else {
@@ -725,7 +714,6 @@ function handleData(d, senderConn = null) {
             broadcast({ type: 'SAVE_STATS', stats });
             localStorage.setItem(STATS_KEY, JSON.stringify(stats));
             
-            // 受付用通算データを全クライアントに配信
             broadcast({ type: 'SYNC_RECEPTION_DATA', allTime: allTimeData });
 
             currentRaceNum = 0;
@@ -848,8 +836,6 @@ function startMonitorCountdown(targetTime) {
             if(myRole === 'monitor') {
                 raceStatus = 'playing';
                 broadcast({ type: 'RACE_START_SIGNAL', status: 'playing' });
-                
-                // 動画を停止状態で準備し、全画面タップ用ボタンを表示する
                 prepareVideoAndShowOverlay(); 
             }
         }
@@ -857,67 +843,54 @@ function startMonitorCountdown(targetTime) {
     }, 100);
 }
 
-// 動画を停止状態で準備し、全画面透明ボタンを表示する関数
 function prepareVideoAndShowOverlay() {
     const v = document.getElementById('mainVideo'); 
     const url = videoMap.get(currentRace.id); 
     
-    // 動画URLがない場合は即座にリザルト処理へ
     if(!url) return finalizeRace();
     
-    // 動画の初期設定
     v.src = url; 
     v.style.display = 'block';
     v.muted = false; 
-    v.pause();          // 確実に一時停止状態にする
-    v.currentTime = 0;   // 動画を先頭に戻して待機
+    v.pause();          
+    v.currentTime = 0; 
 
-    // 重複防止：古いボタンが残っていれば事前に削除
     const oldBtn = document.getElementById('manual-play-overlay');
     if (oldBtn) oldBtn.remove();
 
-    // 透明な全画面ボタン（オーバーレイ）を動的に作成
     const playBtn = document.createElement('div');
     playBtn.id = 'manual-play-overlay';
     
-    // 画面全体を完全に覆うスタイル
     Object.assign(playBtn.style, {
         position: 'fixed',
         top: '0',
         left: '0',
         width: '100vw',
         height: '100vh',
-        zIndex: '99999',         // 他の要素よりも確実に手前に配置
-        background: 'rgba(0, 0, 0, 0)', // 完全透明（見た目には何も見えない）
+        zIndex: '99999',         
+        background: 'rgba(0, 0, 0, 0)', 
         cursor: 'pointer'
     });
 
-    // 画面のどこかがクリックされた時の処理
     playBtn.onclick = async () => {
-        playBtn.remove(); // クリックされたら即座に透明ボタンを削除
-        
+        playBtn.remove(); 
         try { 
-            await v.play(); // ユーザー操作をトリガーにして動画を再生
+            await v.play(); 
         } catch(e) { 
             console.error("動画の再生に失敗しました:", e);
-            finalizeRace(); // 再生失敗時は停止させずに終了処理へ逃がす
+            finalizeRace(); 
         }
     };
 
-    // 動画が最後まで再生し終わった時のイベント設定
     v.onended = () => { 
         v.style.display = 'none'; 
         finalizeRace(); 
     };
 
-    // 生成した透明ボタンを画面（body）に追加
     document.body.appendChild(playBtn);
 }
 
-// 互換性維持のためのplayVideo関数
 async function playVideo() {
-    // 新方式（prepareVideoAndShowOverlay）に移行したため、
-    // 万が一他の処理からこの関数が直接呼ばれた場合のみ、そのまま再生を試みます。
     const v = document.getElementById('mainVideo');
     try { 
         await v.play(); 
@@ -1034,10 +1007,12 @@ function changeBet(i, a) {
     if (raceStatus === 'playing') return; 
     if(myChips >= a) { myChips -= a; tempBets[i] = (tempBets[i]||0) + a; updateGuestChipsUI(); updateBetRow(i); } 
 }
+
 function cancelBet(i) { 
     if (raceStatus === 'playing') return;
     myChips += (tempBets[i] || 0); tempBets[i] = 0; updateGuestChipsUI(); updateBetRow(i); 
 }
+
 function confirmBet(i) {
     if (raceStatus === 'playing') return; 
     const a = tempBets[i]||0; if(a <= 0) return;
@@ -1045,6 +1020,7 @@ function confirmBet(i) {
     connToMonitor.send({ type: 'BET', idx: i, amount: a });
     tempBets[i] = 0; updateBetRow(i);
 }
+
 function updateBetRow(i) { document.getElementById(`g-status-${i}`).innerText = `確定:${confirmedBets[i]||0} / 準備:${tempBets[i]||0}`; }
 function updateGuestChipsUI() { document.getElementById('my-chips').innerText = myChips; }
 function updateGuestOddsUI(){ if(currentRace) currentRace.horses.forEach((h,i) => { const el=document.getElementById(`g-odd-${i}`); if(el) el.innerText=`x${h.currentOdds.toFixed(2)}`; }); }
@@ -1082,344 +1058,12 @@ function sendReceptionUpdate() {
 
 // 追加：受付画面と操作パネルのアラートを最新にするレンダリング処理
 function updateReceptionUI() {
-    // 1. 受付パネル内のパーツ更新
     const recCountEl = document.getElementById('rec-connected-count');
     if (recCountEl) {
-        // 接続数はconnectionsから直接（自身がモニターの場合）か、受信データから反映
         if (myRole === 'monitor') {
             recCountEl.innerText = connections.filter(c => c && c.open).length + " 人";
         }
     }
-    
-    const recTotalUsersEl = document.getElementById('rec-total-users');
-    if (recTotalUsersEl) recTotalUsersEl.innerText = Object.keys(guestBalances).length + " 人";
-
-    // 前回シリーズの結果を受付に反映
-    if (document.getElementById('rec-hist-total')) {
-        document.getElementById('rec-hist-total').innerText = previousRaceStats.total.toLocaleString();
-        document.getElementById('rec-hist-divided').innerText = previousRaceStats.divided.toLocaleString();
-        document.getElementById('rec-hist-carry').innerText = previousRaceStats.carryOver.toLocaleString();
-    }
-
-    // 累計チップ割合ゲージの計算（50000で割る）
-    const totalEver = allTimeData.totalChipsEver || 0;
-    const times = Math.floor(totalEver / 50000); // 何回
-    const percent = Math.floor((totalEver % 50000) / 50000 * 100); // 割合%
-
-    const gaugeText = document.getElementById('rec-gauge-text');
-    const gaugeBar = document.getElementById('rec-gauge-bar');
-    if (gaugeText) {
-        gaugeText.innerText = `${totalEver.toLocaleString()}玉 (${times}回と${percent}%)`;
-    }
-    if (gaugeBar) {
-        // 達成回数が1回以上ならゲージは満タン、そうでなければパーセント幅
-        gaugeBar.style.width = times > 0 ? '100%' : `${percent}%`;
-    }
-
-    // 通算プレイヤーランキングの生成
-    const recRankList = document.getElementById('reception-ranking-list');
-    if (recRankList) {
-        const sortedArray = Object.entries(allTimeData.userHistoryMap)
-            .map(([name, chips]) => ({ name, chips }))
-            .sort((a, b) => b.chips - a.chips);
-
-        if (sortedArray.length === 0) {
-            recRankList.innerHTML = '<div style="color:#aaa; text-align:center; padding:10px;">参加データがありません</div>';
-        } else {
-            recRankList.innerHTML = sortedArray.map((p, idx) => `
-                <div class="history-rank-item" style="padding: 6px 0;">
-                    <span><b>${idx + 1}位</b> ${p.name}</span>
-                    <span style="color:var(--accent); font-weight:bold;">${p.chips.toLocaleString()}玉</span>
-                </div>
-            `).join('');
-        }
-    }
-}
-
-// 既存の handleData 関数の内部（末尾条件分岐など）に、受付用シグナルの受取処理を追加
-const originalHandleData = handleData;
-handleData = function(d, senderConn = null) {
-    // 既存の処理を呼び出し
-    originalHandleData(d, senderConn);
-
-    // 追加分のシグナルハンドリング
-    if (d.type === 'RECEPTION_STATUS_UPDATE') {
-        if (document.getElementById('rec-connected-count') && d.connectedCount !== undefined) {
-            document.getElementById('rec-connected-count').innerText = d.connectedCount + " 人";
-        }
-        if (d.allTime) {
-            allTimeData = d.allTime;
-        }
-        updateReceptionUI();
-    }
-    if (d.type === 'SYNC_RECEPTION_DATA') {
-        allTimeData = d.allTime;
-        updateReceptionUI();
-    }
-    if (d.type === 'TARGET_ACHIEVED') {
-        const alertBox = document.getElementById('ctrl-target-alert');
-        if (alertBox) {
-            if (d.achieved) {
-                alertBox.classList.remove('hidden');
-            } else {
-                alertBox.classList.add('hidden');
-            }
-        }
-    }
-    // ゲスト接続時などの定期更新フック
-    if (myRole === 'monitor' && (d.type === 'JOIN' || d.type === 'BET')) {
-        sendReceptionUpdate();
-    }
-};
-
-function resetForm() {
-    document.getElementById('editingId').value = '';
-    document.getElementById('raceName').value = '';
-    document.getElementById('videoFile').value = '';
-    document.getElementById('video-status').innerText = '';
-    document.getElementById('horse-inputs').innerHTML = '';
-    document.getElementById('cancel-edit-btn').classList.add('hidden');
-    document.getElementById('apply-btn').innerText = "保存して一覧を更新";
-    addHorseField('UMA1', 2.0, 1);
-    addHorseField('UMA2', 3.5, 2);
-}
-
-function applyToPool() {
-    const id = document.getElementById('editingId').value || 'race_' + Date.now();
-    const name = document.getElementById('raceName').value.trim();
-    if(!name) return alert("レース名を入力してください");
-
-    const horses = [];
-    let hasWinner = false;
-    const rows = document.querySelectorAll('.horse-input-row');
-    rows.forEach(row => {
-        const hName = row.querySelector('.h-name').value.trim();
-        const hOdds = parseFloat(row.querySelector('.h-odds').value) || 2.0;
-        const hRank = parseInt(row.querySelector('.h-rank').value) || 1;
-        if(hName) {
-            horses.push({ name: hName, initialOdds: hOdds, rank: hRank });
-            if(hRank === 1) hasWinner = true;
-        }
-    });
-
-    if(horses.length < 2) return alert("最低2頭以上の馬を登録してください");
-    if(!hasWinner) return alert("着順「1」位の馬を必ず1頭以上設定してください");
-
-    const fileInput = document.getElementById('videoFile');
-    if(fileInput.files.length > 0 && db) {
-        const file = fileInput.files[0];
-        const transaction = db.transaction(["videos"], "readwrite");
-        transaction.objectStore("videos").put(file, id);
-        videoMap.set(id, URL.createObjectURL(file));
-    } else if(!videoMap.has(id)) {
-        return alert("動画ファイルを選択してください（新規登録時）");
-    }
-
-    const raceData = { id, name, horses };
-    const activePool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
-    const existingIdx = activePool.findIndex(r => r.id === id);
-
-    if(existingIdx >= 0) activePool[existingIdx] = raceData;
-    else activePool.push(raceData);
-
-    localStorage.setItem(currentDataTab === 'race-thanks' ? STORAGE_KEY_THANKS : STORAGE_KEY_NORMAL, JSON.stringify(activePool));
-    
-    resetForm();
-    updateRaceListUI();
-    alert("レースデータを保存しました");
-}
-
-function updateRaceListUI() {
-    const container = document.getElementById('race-list-display');
-    if(!container) return;
-    const activePool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
-
-    if(activePool.length === 0) {
-        container.innerHTML = '<p style="color:#aaa; text-align:center; font-size:12px;">登録済みのレースがありません</p>';
-        return;
-    }
-
-    container.innerHTML = activePool.map(r => `
-        <div class="race-card">
-            <div>
-                <strong style="color:var(--gold);">${r.name}</strong>
-                <div style="font-size:11px; color:#aaa; margin-top:2px;">
-                    ${r.horses.map(h => `${h.name}(x${h.initialOdds.toFixed(1)})[${h.rank}着]`).join(', ')}
-                </div>
-                <div style="font-size:10px; color:var(--accent); margin-top:2px;">
-                    ${videoMap.has(r.id) ? '● 動画あり' : '❌ 動画なし（要再登録）'}
-                </div>
-            </div>
-            <div style="display:flex; gap:3px;">
-                <button class="mini-btn" style="background:var(--blue); padding:5px 8px;" onclick="editRace('${r.id}')">編</button>
-                <button class="mini-btn" style="background:var(--red); padding:5px 8px;" onclick="deleteRace('${r.id}')">削</button>
-            </div>
-        </div>
-    `).join('');
-}
-
-function editRace(id) {
-    const activePool = currentDataTab === 'race-thanks' ? thanksRacePool : racePool;
-    const race = activePool.find(r => r.id === id);
-    if(!race) return;
-
-    document.getElementById('editingId').value = race.id;
-    document.getElementById('raceName').value = race.name;
-    document.getElementById('video-status').innerText = videoMap.has(id) ? "※動画ファイルは既に登録されています（変更する場合のみ選択）" : "";
-    
-    const container = document.getElementById('horse-inputs');
-    container.innerHTML = '';
-    race.horses.forEach(h => {
-        addHorseField(h.name, h.initialOdds, h.rank);
-    });
-
-    document.getElementById('cancel-edit-btn').classList.remove('hidden');
-    document.getElementById('apply-btn').innerText = "変更を適用";
-    document.getElementById('race-tab').scrollIntoView({ behavior: 'smooth' });
-}
-
-function deleteRace(id) {
-    if(!confirm("このレースを削除しますか？")) return;
-    if(currentDataTab === 'race-thanks') {
-        thanksRacePool = thanksRacePool.filter(r => r.id !== id);
-        localStorage.setItem(STORAGE_KEY_THANKS, JSON.stringify(thanksRacePool));
-    } else {
-        racePool = racePool.filter(r => r.id !== id);
-        localStorage.setItem(STORAGE_KEY_NORMAL, JSON.stringify(racePool));
-    }
-
-    if(db) {
-        const transaction = db.transaction(["videos"], "readwrite");
-        transaction.objectStore("videos").delete(id);
-    }
-    videoMap.delete(id);
-
-    updateRaceListUI();
-}
-
-// --- ZIP一括エクスポート/インポート ---
-async function exportRaceDataZip() {
-    const btn = document.getElementById('export-zip-btn');
-    btn.innerText = "圧縮中...お待ちください...";
-    btn.disabled = true;
-
-    try {
-        const zip = new JSZip();
-        const meta = {
-            version: "turf_v2.5",
-            normalPool: racePool,
-            thanksPool: thanksRacePool
-        };
-        zip.file("meta.json", JSON.stringify(meta));
-
-        if(db) {
-            const folder = zip.folder("videos");
-            const transaction = db.transaction(["videos"], "readonly");
-            const store = transaction.objectStore("videos");
-            
-            await new Promise((resolve, reject) => {
-                store.openCursor().onsuccess = (e) => {
-                    const cursor = e.target.result;
-                    if(cursor) {
-                        folder.file(cursor.key, cursor.value);
-                        cursor.continue();
-                    } else {
-                        resolve();
-                    }
-                };
-            });
-        }
-
-        const content = await zip.generateAsync({type:"blob"});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(content);
-        a.download = `UMA1_GP_Backup_${Date.now()}.zip`;
-        a.click();
-    } catch (err) {
-        alert("バックアップ作成中にエラーが発生しました:" + err);
-    } finally {
-        btn.innerText = "A. 動画付きでZIPとして保存（推奨）";
-        btn.disabled = false;
-    }
-}
-
-function importRaceDataZip(input) {
-    if(!input.files || input.files.length === 0) return;
-    if(!confirm("データをインポートしますか？現行の登録データは上書き・リセットされます。")) return;
-
-    const file = input.files[0];
-    JSZip.loadAsync(file).then(async (zip) => {
-        const metaFile = zip.file("meta.json");
-        if(!metaFile) throw new Error("不正なバックアップZIPファイルです。");
-
-        const metaText = await metaFile.async("text");
-        const meta = JSON.parse(metaText);
-
-        racePool = meta.normalPool || [];
-        thanksRacePool = meta.thanksPool || [];
-        localStorage.setItem(STORAGE_KEY_NORMAL, JSON.stringify(racePool));
-        localStorage.setItem(STORAGE_KEY_THANKS, JSON.stringify(thanksRacePool));
-
-        if(db) {
-            const clearTx = db.transaction(["videos"], "readwrite");
-            clearTx.objectStore("videos").clear();
-            
-            const videoFolder = zip.folder("videos");
-            const promises = [];
-            
-            videoFolder.forEach((relativePath, zipEntry) => {
-                const id = zipEntry.name;
-                const p = zipEntry.async("blob").then(blob => {
-                    const writeTx = db.transaction(["videos"], "readwrite");
-                    return new Promise((res) => {
-                        writeTx.objectStore("videos").put(blob, id).onsuccess = () => {
-                            videoMap.set(id, URL.createObjectURL(blob));
-                            res();
-                        };
-                    });
-                });
-                promises.push(p);
-            });
-            await Promise.all(promises);
-        }
-
-        updateRaceListUI();
-        alert("ZIPからの復元が完了しました！ページを一度リロードして確認してください。");
-        location.reload();
-    }).catch(err => {
-        alert("復元中にエラーが発生しました。容量制限等によるエラーの可能性があります。\n" + err);
-    });
-}
-
-function exportRaceDataJsonOnly() {
-    const meta = { version: "turf_v2.5_json", normalPool: racePool, thanksPool: thanksRacePool };
-    const blob = new Blob([JSON.stringify(meta, null, 2)], {type: "application/json"});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `UMA1_GP_ConfigOnly_${Date.now()}.json`;
-    a.click();
-}
-
-function importRaceDataJsonOnly(input) {
-    if(!input.files || input.files.length === 0) return;
-    if(!confirm("レース設定のみをインポートしますか？動画データは復元されません。")) return;
-
-    const file = input.files[0];
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            const meta = JSON.parse(e.target.result);
-            racePool = meta.normalPool || [];
-            thanksRacePool = meta.thanksPool || [];
-            localStorage.setItem(STORAGE_KEY_NORMAL, JSON.stringify(racePool));
-            localStorage.setItem(STORAGE_KEY_THANKS, JSON.stringify(thanksRacePool));
-            updateRaceListUI();
-            alert("レース設定のインポートが完了しました。別途各レースの「編」ボタンから動画を再設定してください。");
-        } catch(err) {
-            alert("JSONファイルの解析に失敗しました。");
-        }
-    };
-    reader.readAsText(file);
 }
 </script>
 </body>
