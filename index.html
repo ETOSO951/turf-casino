@@ -76,17 +76,19 @@
 
 <div class="container">
     <div id="nav-tabs" style="display:flex; gap:10px; margin-bottom:15px;">
-        <button class="btn" onclick="showSection('setup-screen')" style="margin:0; flex:1;">設定</button>
-        <button class="btn" onclick="openDataManager()" style="margin:0; flex:1; background:#333; color:#fff;">データ管理</button>
-    </div>
+    <button class="btn" onclick="showSection('setup-screen')" style="margin:0; flex:1;">設定</button>
+    <button class="btn" onclick="openDataManager()" style="margin:0; flex:1; background:#333; color:#fff;">データ管理</button>
+    <button class="btn" onclick="showSection('reception-screen')" style="margin:0; flex:1; background:#2ed573; color:#fff;">受付パネル</button>
+</div>
 
     <div id="setup-screen" class="section board">
         <h2 style="text-align:center; color:var(--gold);">UMA1 GP</h2>
         <input type="text" id="roomName" placeholder="合言葉">
         <input type="number" id="seriesCount" value="1" placeholder="総レース数">
         <button class="btn" onclick="initPeer('monitor')">モニター起動</button>
-        <button class="btn" onclick="initPeer('controller')" style="background:var(--blue); color:#fff;">操作パネル接続</button>
-        <button class="btn" onclick="initPeer('guest')" style="background:#fff; color:#000;">運営タブレット参加</button>
+<button class="btn" onclick="initPeer('controller')" style="background:var(--blue); color:#fff;">操作パネル接続</button>
+<button class="btn" onclick="initPeer('reception')" style="background:#2ed573; color:#fff;">受付パネル接続</button>
+<button class="btn" onclick="initPeer('guest')" style="background:#fff; color:#000;">運営タブレット参加</button>
     </div>
 
     <div id="data-manager" class="section hidden board">
@@ -145,7 +147,11 @@
 
     <!-- 操作パネル画面 -->
     <div id="controller-screen" class="section hidden board">
-        <div class="tg-badge">🍁 感謝祭モード適用中 🍁</div>
+    <div class="tg-badge">🍁 感謝祭モード適用中 🍁</div>
+    
+    <div id="ctrl-reception-alert" class="hidden" style="background:var(--red); border:2px solid var(--gold); padding:10px; border-radius:8px; margin-bottom:15px; text-align:center; animation:pulse 1.5s infinite;">
+        <b style="color:#fff; font-size:16px;">⚠️ 受付通知: チップ目標100%達成！<br>システム制限が解除され、借金可能になりました。</b>
+    </div>
         
         <!-- 前回レース集計・キャリーオーバー表示エリア -->
         <div class="history-panel">
@@ -229,7 +235,18 @@ let tempBets = {}, confirmedBets = {}, guestBalances = {}, myRole = '';
 let raceStatus = 'idle'; 
 
 // 前回データ管理オブジェクト (初期値)
+
+// 前回データ管理オブジェクト (初期値)
 let previousRaceStats = { total: 0, divided: 0, carryOver: 0, ranking: [] };
+
+// 🌟 受付パネル用：歴史的な全累積データの保持オブジェクト
+let globalReceptionStats = {
+    allTimeTotalChips: 0,
+    allTimeRanking: {}, // { 'プレイヤー名': 累計チップ }
+    totalParticipantsCount: 0,
+    loanEnabled: false
+};
+const RECEPTION_KEY = 'turf_reception_global_stats';
 
 const STORAGE_KEY_NORMAL = 'turf_v25_normal';
 const STORAGE_KEY_THANKS = 'turf_v25_thanks';
