@@ -77,19 +77,19 @@
 <div class="container">
     <div id="nav-tabs" style="display:flex; gap:10px; margin-bottom:15px;">
     <button class="btn" onclick="showSection('setup-screen')" style="margin:0; flex:1;">設定</button>
+    <button class="btn" onclick="showSection('reception-screen')" style="margin:0; flex:1; background:#10ac84; color:#fff;">受付</button>
     <button class="btn" onclick="openDataManager()" style="margin:0; flex:1; background:#333; color:#fff;">データ管理</button>
-    <button class="btn" onclick="showSection('reception-screen')" style="margin:0; flex:1; background:#2ed573; color:#fff;">受付パネル</button>
 </div>
 
     <div id="setup-screen" class="section board">
-        <h2 style="text-align:center; color:var(--gold);">UMA1 GP</h2>
-        <input type="text" id="roomName" placeholder="合言葉">
-        <input type="number" id="seriesCount" value="1" placeholder="総レース数">
-        <button class="btn" onclick="initPeer('monitor')">モニター起動</button>
-<button class="btn" onclick="initPeer('controller')" style="background:var(--blue); color:#fff;">操作パネル接続</button>
-<button class="btn" onclick="initPeer('reception')" style="background:#2ed573; color:#fff;">受付パネル接続</button>
-<button class="btn" onclick="initPeer('guest')" style="background:#fff; color:#000;">運営タブレット参加</button>
-    </div>
+    <h2 style="text-align:center; color:var(--gold);">UMA1 GP</h2>
+    <input type="text" id="roomName" placeholder="合言葉">
+    <input type="number" id="seriesCount" value="1" placeholder="総レース数">
+    <button class="btn" onclick="initPeer('monitor')">モニター起動</button>
+    <button class="btn" onclick="initPeer('controller')" style="background:var(--blue); color:#fff;">操作パネル接続</button>
+    <button class="btn" onclick="initPeer('reception')" style="background:#10ac84; color:#fff;">受付パネル起動</button>
+    <button class="btn" onclick="initPeer('guest')" style="background:#fff; color:#000;">運営タブレット参加</button>
+</div>
 
     <div id="data-manager" class="section hidden board">
         <h2 style="text-align:center; color:var(--gold); margin-top:0;">⚙️ データ管理</h2>
@@ -149,8 +149,8 @@
     <div id="controller-screen" class="section hidden board">
     <div class="tg-badge">🍁 感謝祭モード適用中 🍁</div>
     
-    <div id="ctrl-reception-alert" class="hidden" style="background:var(--red); border:2px solid var(--gold); padding:10px; border-radius:8px; margin-bottom:15px; text-align:center; animation:pulse 1.5s infinite;">
-        <b style="color:#fff; font-size:16px;">⚠️ 受付通知: チップ目標100%達成！<br>システム制限が解除され、借金可能になりました。</b>
+    <div id="ctrl-target-alert" class="hidden" style="background:linear-gradient(45deg, #ff0055, #ff9f43); padding:10px; border-radius:8px; text-align:center; margin-bottom:10px; font-weight:bold; color:#fff; animation: pulse 1s infinite;">
+        🎉 【通知】累計チップ数 50,000玉 達成！ 🎉
     </div>
         
         <!-- 前回レース集計・キャリーオーバー表示エリア -->
@@ -219,6 +219,48 @@
         </div>
         <div id="betting-area">（レース抽選待ちです...）</div>
     </div>
+
+<div id="reception-screen" class="section hidden board">
+        <h2 style="text-align:center; color:#10ac84; margin-top:0;">📋 受付データ管理</h2>
+        
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
+            <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; text-align:center;">
+                <span style="font-size:11px; color:#aaa;">今接続している人数</span>
+                <div id="rec-connected-count" style="font-size:24px; font-weight:bold; color:var(--blue);">0 人</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; text-align:center;">
+                <span style="font-size:11px; color:#aaa;">全参加者数(登録総数)</span>
+                <div id="rec-total-users" style="font-size:24px; font-weight:bold; color:var(--gold);">0 人</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:8px; margin-bottom:15px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:13px;">
+                <span>🎯 今までの全参加者チップ合計進捗</span>
+                <span id="rec-gauge-text" style="font-weight:bold; color:var(--accent);">0玉 (0回と0%)</span>
+            </div>
+            <div style="background:#222; border-radius:10px; height:20px; overflow:hidden; border:1px solid #444;">
+                <div id="rec-gauge-bar" style="background:linear-gradient(90deg, #10ac84, var(--accent)); width:0%; height:100%; transition: width 0.5s ease;"></div>
+            </div>
+            <span style="font-size:10px; color:#aaa; display:block; margin-top:4px;">※50,000玉を100%とした時の達成回数と割合</span>
+        </div>
+
+        <div class="history-panel" style="margin-bottom:15px;">
+            <div class="history-title">📊 前回シリーズの結果</div>
+            <div style="margin-top:5px; font-size:12px; color:#ccc;">
+                通算チップ数: <span id="rec-hist-total" style="color:var(--gold);">0</span>玉 | 
+                5000割: <span id="rec-hist-divided">0</span>回 | 
+                キャリーオーバー: <span id="rec-hist-carry">0</span>玉
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:8px;">
+            <div style="font-weight:bold; color:var(--accent); margin-bottom:8px; font-size:14px;">🏆 通算プレイヤーランキング</div>
+            <div id="reception-ranking-list" style="max-height:200px; overflow-y:auto; font-size:13px;">
+                <div style="color:#aaa; text-align:center; padding:10px;">参加データがありません</div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <video id="mainVideo" playsinline style="position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:9999; display:none;"></video>
@@ -231,22 +273,19 @@ let isThanksgiving = false;
 
 let peer = null, connections = [], connToMonitor = null;
 let currentRace = null, myChips = 1000, currentRaceNum = 0, seriesTotal = 0;
+
 let tempBets = {}, confirmedBets = {}, guestBalances = {}, myRole = '';
 let raceStatus = 'idle'; 
 
 // 前回データ管理オブジェクト (初期値)
-
-// 前回データ管理オブジェクト (初期値)
 let previousRaceStats = { total: 0, divided: 0, carryOver: 0, ranking: [] };
 
-// 🌟 受付パネル用：歴史的な全累積データの保持オブジェクト
-let globalReceptionStats = {
-    allTimeTotalChips: 0,
-    allTimeRanking: {}, // { 'プレイヤー名': 累計チップ }
-    totalParticipantsCount: 0,
-    loanEnabled: false
+// 追加：全参加者の累計チップとランキングを管理するキー
+const ALL_TIME_DATA_KEY = 'turf_all_time_reception_data';
+let allTimeData = {
+    totalChipsEver: 0, // 今までの全参加者が集めたチップ合計
+    userHistoryMap: {} // { プレイヤー名: 最高（最終）チップ数 } 
 };
-const RECEPTION_KEY = 'turf_reception_global_stats';
 
 const STORAGE_KEY_NORMAL = 'turf_v25_normal';
 const STORAGE_KEY_THANKS = 'turf_v25_thanks';
@@ -297,7 +336,14 @@ window.onload = () => {
         updateHistoryUI();
     }
 
+    // 追加：通算データの読み込み
+    const savedAllTime = localStorage.getItem(ALL_TIME_DATA_KEY);
+    if(savedAllTime) {
+        allTimeData = JSON.parse(savedAllTime);
+    }
+
     updateRaceListUI();
+    updateReceptionUI(); // 追加：受付用画面の描画更新
     updatePresetList();
     loadDefaultPreset();
 };
@@ -518,7 +564,17 @@ function initPeer(role) {
             showSection('monitor-screen');
             peer.on('connection', c => { 
                 connections.push(c); 
+                
+                // 追加：接続が入ったら人数を更新して同期
+                setTimeout(() => sendReceptionUpdate(), 500);
+
                 c.on('data', d => handleData(d, c)); 
+                
+                // 追加：切断を検知したとき
+                c.on('close', () => {
+                    connections = connections.filter(conn => conn.peer !== c.peer);
+                    sendReceptionUpdate();
+                });
             });
         } else {
             connToMonitor = peer.connect(room);
@@ -587,7 +643,19 @@ function handleData(d, senderConn = null) {
                 const h = currentRace.horses[d.idx];
                 h.pool = (h.pool || 0) + d.amount;
                 h.bets[senderConn.peer] = (h.bets[senderConn.peer]||0) + d.amount;
-                if(guestBalances[senderConn.peer]) guestBalances[senderConn.peer].chips -= d.amount;
+                
+                // 変更：残高が足りなくてもマイナス（借金）を許可してそのまま減算
+                if(guestBalances[senderConn.peer]) {
+                    guestBalances[senderConn.peer].chips -= d.amount;
+                }
+                
+                updateOdds();
+                broadcast({ type: 'UPDATE_STATE', horses: currentRace.horses, balances: guestBalances });
+                renderMonitorUI();
+                sendReceptionUpdate(); // 追加：受付パネル側にもリアルタイムのチップ状態を伝える
+            }
+            return;
+        }
                 updateOdds();
                 broadcast({ type: 'UPDATE_STATE', horses: currentRace.horses, balances: guestBalances });
                 renderMonitorUI();
@@ -625,6 +693,7 @@ function handleData(d, senderConn = null) {
             const carryOver = finalCombinedPool % 5000;
 
             // 算出した戦績データにプレイヤーランキングの簡易スナップショットを含める
+            // 算出した戦績データにプレイヤーランキングの簡易スナップショットを含める
             const stats = { 
                 total: finalCombinedPool, 
                 divided, 
@@ -632,8 +701,32 @@ function handleData(d, senderConn = null) {
                 ranking: rankArray.map(p => ({ name: p.name, chips: p.chips }))
             };
 
+            // 🌟 追加：今までの全参加者データを更新・蓄積するロジック
+            rankArray.forEach(p => {
+                // 各プレイヤーのこれまでの最高もしくは最新スコアを記録
+                allTimeData.userHistoryMap[p.name] = (allTimeData.userHistoryMap[p.name] || 0) + p.chips;
+            });
+            // 今シリーズで全参加者が最終的に集めたチップ合計（マイナス分も含む純増・減）を累計に加算
+            let seriesUserTotal = 0;
+            Object.values(guestBalances).forEach(p => { seriesUserTotal += (p.chips || 0); });
+            allTimeData.totalChipsEver += seriesUserTotal;
+            if(allTimeData.totalChipsEver < 0) allTimeData.totalChipsEver = 0; // 負数は0ガード
+
+            // ローカルストレージへ保存
+            localStorage.setItem(ALL_TIME_DATA_KEY, JSON.stringify(allTimeData));
+
+            // 🎯 追加：累計チップが50000を超えた（100%達成）場合の操作パネル連携判定
+            if (allTimeData.totalChipsEver >= 50000) {
+                broadcast({ type: 'TARGET_ACHIEVED', achieved: true });
+            } else {
+                broadcast({ type: 'TARGET_ACHIEVED', achieved: false });
+            }
+
             broadcast({ type: 'SAVE_STATS', stats });
             localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+            
+            // 受付用通算データを全クライアントに配信
+            broadcast({ type: 'SYNC_RECEPTION_DATA', allTime: allTimeData });
 
             currentRaceNum = 0;
             guestBalances = {};
@@ -968,6 +1061,116 @@ function addHorseField(name='', initialOdds=2.0, rank=1) {
     `;
     container.appendChild(div);
 }
+
+// 追加：受付パネルの表示更新およびデータ同期用の関数群
+function sendReceptionUpdate() {
+    if (myRole !== 'monitor') return;
+    
+    // 現在アクティブなPeer接続の数（モニター自身を除く）
+    const activeCount = connections.filter(c => c && c.open).length;
+    // 登録されているユニークユーザー数
+    const totalUsers = Object.keys(guestBalances).length;
+
+    broadcast({
+        type: 'RECEPTION_STATUS_UPDATE',
+        connectedCount: activeCount,
+        totalUsers: totalUsers,
+        balances: guestBalances,
+        allTime: allTimeData
+    });
+}
+
+// 追加：受付画面と操作パネルのアラートを最新にするレンダリング処理
+function updateReceptionUI() {
+    // 1. 受付パネル内のパーツ更新
+    const recCountEl = document.getElementById('rec-connected-count');
+    if (recCountEl) {
+        // 接続数はconnectionsから直接（自身がモニターの場合）か、受信データから反映
+        if (myRole === 'monitor') {
+            recCountEl.innerText = connections.filter(c => c && c.open).length + " 人";
+        }
+    }
+    
+    const recTotalUsersEl = document.getElementById('rec-total-users');
+    if (recTotalUsersEl) recTotalUsersEl.innerText = Object.keys(guestBalances).length + " 人";
+
+    // 前回シリーズの結果を受付に反映
+    if (document.getElementById('rec-hist-total')) {
+        document.getElementById('rec-hist-total').innerText = previousRaceStats.total.toLocaleString();
+        document.getElementById('rec-hist-divided').innerText = previousRaceStats.divided.toLocaleString();
+        document.getElementById('rec-hist-carry').innerText = previousRaceStats.carryOver.toLocaleString();
+    }
+
+    // 累計チップ割合ゲージの計算（50000で割る）
+    const totalEver = allTimeData.totalChipsEver || 0;
+    const times = Math.floor(totalEver / 50000); // 何回
+    const percent = Math.floor((totalEver % 50000) / 50000 * 100); // 割合%
+
+    const gaugeText = document.getElementById('rec-gauge-text');
+    const gaugeBar = document.getElementById('rec-gauge-bar');
+    if (gaugeText) {
+        gaugeText.innerText = `${totalEver.toLocaleString()}玉 (${times}回と${percent}%)`;
+    }
+    if (gaugeBar) {
+        // 達成回数が1回以上ならゲージは満タン、そうでなければパーセント幅
+        gaugeBar.style.width = times > 0 ? '100%' : `${percent}%`;
+    }
+
+    // 通算プレイヤーランキングの生成
+    const recRankList = document.getElementById('reception-ranking-list');
+    if (recRankList) {
+        const sortedArray = Object.entries(allTimeData.userHistoryMap)
+            .map(([name, chips]) => ({ name, chips }))
+            .sort((a, b) => b.chips - a.chips);
+
+        if (sortedArray.length === 0) {
+            recRankList.innerHTML = '<div style="color:#aaa; text-align:center; padding:10px;">参加データがありません</div>';
+        } else {
+            recRankList.innerHTML = sortedArray.map((p, idx) => `
+                <div class="history-rank-item" style="padding: 6px 0;">
+                    <span><b>${idx + 1}位</b> ${p.name}</span>
+                    <span style="color:var(--accent); font-weight:bold;">${p.chips.toLocaleString()}玉</span>
+                </div>
+            `).join('');
+        }
+    }
+}
+
+// 既存の handleData 関数の内部（末尾条件分岐など）に、受付用シグナルの受取処理を追加
+const originalHandleData = handleData;
+handleData = function(d, senderConn = null) {
+    // 既存の処理を呼び出し
+    originalHandleData(d, senderConn);
+
+    // 追加分のシグナルハンドリング
+    if (d.type === 'RECEPTION_STATUS_UPDATE') {
+        if (document.getElementById('rec-connected-count') && d.connectedCount !== undefined) {
+            document.getElementById('rec-connected-count').innerText = d.connectedCount + " 人";
+        }
+        if (d.allTime) {
+            allTimeData = d.allTime;
+        }
+        updateReceptionUI();
+    }
+    if (d.type === 'SYNC_RECEPTION_DATA') {
+        allTimeData = d.allTime;
+        updateReceptionUI();
+    }
+    if (d.type === 'TARGET_ACHIEVED') {
+        const alertBox = document.getElementById('ctrl-target-alert');
+        if (alertBox) {
+            if (d.achieved) {
+                alertBox.classList.remove('hidden');
+            } else {
+                alertBox.classList.add('hidden');
+            }
+        }
+    }
+    // ゲスト接続時などの定期更新フック
+    if (myRole === 'monitor' && (d.type === 'JOIN' || d.type === 'BET')) {
+        sendReceptionUpdate();
+    }
+};
 
 function resetForm() {
     document.getElementById('editingId').value = '';
